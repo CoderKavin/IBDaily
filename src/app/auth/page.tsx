@@ -88,7 +88,17 @@ export default function AuthPage() {
         case "auth/network-request-failed":
           setError("Network error. Please check your connection.");
           break;
+        case "auth/operation-not-allowed":
+          setError("Email/Password sign-in is not enabled. Please contact support.");
+          break;
+        case "auth/user-disabled":
+          setError("This account has been disabled.");
+          break;
+        case "auth/requires-recent-login":
+          setError("Please log in again to continue.");
+          break;
         default:
+          console.error("Auth error:", firebaseError.code, firebaseError.message);
           setError(
             firebaseError.message || "Something went wrong. Please try again.",
           );
