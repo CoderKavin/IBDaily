@@ -1,0 +1,26 @@
+{
+  "MATH_AA": [
+    { "name": "Number & Algebra", "orderIndex": 1, "levelScope": "BOTH" },
+    { "name": "Functions", "orderIndex": 2, "levelScope": "BOTH" },
+    { "name": "Geometry & Trigonometry", "orderIndex": 3, "levelScope": "BOTH" },
+    { "name": "Statistics & Probability", "orderIndex": 4, "levelScope": "BOTH" },
+    { "name": "Calculus", "orderIndex": 5, "levelScope": "BOTH" }
+  ],
+  "PHYSICS": [
+    { "name": "Mechanics", "orderIndex": 1, "levelScope": "BOTH" },
+    { "name": "Thermal Physics", "orderIndex": 2, "levelScope": "BOTH" },
+    { "name": "Waves & Optics", "orderIndex": 3, "levelScope": "BOTH" },
+    { "name": "Electricity & Magnetism", "orderIndex": 4, "levelScope": "BOTH" },
+    { "name": "Modern Physics", "orderIndex": 5, "levelScope": "BOTH" }
+  ],
+  "ESS": [
+    { "name": "Foundations of ESS", "orderIndex": 1, "levelScope": "BOTH" },
+    { "name": "Ecology", "orderIndex": 2, "levelScope": "BOTH" },
+    { "name": "Biodiversity & Conservation", "orderIndex": 3, "levelScope": "BOTH" },
+    { "name": "Water", "orderIndex": 4, "levelScope": "BOTH" },
+    { "name": "Land", "orderIndex": 5, "levelScope": "BOTH" },
+    { "name": "Atmosphere & Climate Change", "orderIndex": 6, "levelScope": "BOTH" },
+    { "name": "Natural Resources", "orderIndex": 7, "levelScope": "BOTH" },
+    { "name": "Human Populations & Urban Systems", "orderIndex": 8, "levelScope": "BOTH" }
+  ]
+}

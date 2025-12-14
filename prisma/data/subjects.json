@@ -1,0 +1,322 @@
+[
+  {
+    "subjectCode": "LANG_A_LIT",
+    "transcriptName": "Language A: Literature",
+    "fullName": "Language A: Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "LANG_A_LANG_LIT",
+    "transcriptName": "Language A: Lang & Lit",
+    "fullName": "Language A: Language and Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "LIT_PERF",
+    "transcriptName": "Literature & Performance",
+    "fullName": "Literature and Performance",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": false,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "LANG_AB",
+    "transcriptName": "Language ab initio",
+    "fullName": "Language ab initio",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": false,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "LANG_B",
+    "transcriptName": "Language B",
+    "fullName": "Language B",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "CLASSICAL_LANG",
+    "transcriptName": "Classical Languages",
+    "fullName": "Classical Languages (Latin, Classical Greek)",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "BUS_MGMT",
+    "transcriptName": "Business Management",
+    "fullName": "Business Management",
+    "groupName": "Group 3: Individuals and societies",
+    "groupNumber": 3,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "ECONOMICS",
+    "transcriptName": "Economics",
+    "fullName": "Economics",
+    "groupName": "Group 3: Individuals and societies",
+    "groupNumber": 3,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "GEOGRAPHY",
+    "transcriptName": "Geography",
+    "fullName": "Geography",
+    "groupName": "Group 3: Individuals and societies",
+    "groupNumber": 3,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "GLOBAL_POL",
+    "transcriptName": "Global Politics",
+    "fullName": "Global Politics",
+    "groupName": "Group 3: Individuals and societies",
+    "groupNumber": 3,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "HISTORY",
+    "transcriptName": "History",
+    "fullName": "History",
+    "groupName": "Group 3: Individuals and societies",
+    "groupNumber": 3,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "ITGS",
+    "transcriptName": "ITGS",
+    "fullName": "Information Technology in a Global Society",
+    "groupName": "Group 3: Individuals and societies",
+    "groupNumber": 3,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "PHILOSOPHY",
+    "transcriptName": "Philosophy",
+    "fullName": "Philosophy",
+    "groupName": "Group 3: Individuals and societies",
+    "groupNumber": 3,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "PSYCHOLOGY",
+    "transcriptName": "Psychology",
+    "fullName": "Psychology",
+    "groupName": "Group 3: Individuals and societies",
+    "groupNumber": 3,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "SOCIAL_CULTURAL",
+    "transcriptName": "Social & Cultural Anthro",
+    "fullName": "Social and Cultural Anthropology",
+    "groupName": "Group 3: Individuals and societies",
+    "groupNumber": 3,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "WORLD_RELIGIONS",
+    "transcriptName": "World Religions",
+    "fullName": "World Religions",
+    "groupName": "Group 3: Individuals and societies",
+    "groupNumber": 3,
+    "slAvailable": true,
+    "hlAvailable": false,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "ESS",
+    "transcriptName": "ESS",
+    "fullName": "Environmental Systems and Societies",
+    "groupName": "Group 3/4: Interdisciplinary",
+    "groupNumber": 3,
+    "slAvailable": true,
+    "hlAvailable": false,
+    "hasUnits": true
+  },
+  {
+    "subjectCode": "BIOLOGY",
+    "transcriptName": "Biology",
+    "fullName": "Biology",
+    "groupName": "Group 4: Sciences",
+    "groupNumber": 4,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "CHEMISTRY",
+    "transcriptName": "Chemistry",
+    "fullName": "Chemistry",
+    "groupName": "Group 4: Sciences",
+    "groupNumber": 4,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "PHYSICS",
+    "transcriptName": "Physics",
+    "fullName": "Physics",
+    "groupName": "Group 4: Sciences",
+    "groupNumber": 4,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": true
+  },
+  {
+    "subjectCode": "COMP_SCI",
+    "transcriptName": "Computer Science",
+    "fullName": "Computer Science",
+    "groupName": "Group 4: Sciences",
+    "groupNumber": 4,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "DESIGN_TECH",
+    "transcriptName": "Design Technology",
+    "fullName": "Design Technology",
+    "groupName": "Group 4: Sciences",
+    "groupNumber": 4,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "SPORTS_SCI",
+    "transcriptName": "Sports, Exercise & Health",
+    "fullName": "Sports, Exercise and Health Science",
+    "groupName": "Group 4: Sciences",
+    "groupNumber": 4,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "MATH_AA",
+    "transcriptName": "Math: Analysis",
+    "fullName": "Mathematics: Analysis and Approaches",
+    "groupName": "Group 5: Mathematics",
+    "groupNumber": 5,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": true
+  },
+  {
+    "subjectCode": "MATH_AI",
+    "transcriptName": "Math: Applications",
+    "fullName": "Mathematics: Applications and Interpretation",
+    "groupName": "Group 5: Mathematics",
+    "groupNumber": 5,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "DANCE",
+    "transcriptName": "Dance",
+    "fullName": "Dance",
+    "groupName": "Group 6: The arts",
+    "groupNumber": 6,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "FILM",
+    "transcriptName": "Film",
+    "fullName": "Film",
+    "groupName": "Group 6: The arts",
+    "groupNumber": 6,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "MUSIC",
+    "transcriptName": "Music",
+    "fullName": "Music",
+    "groupName": "Group 6: The arts",
+    "groupNumber": 6,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "THEATRE",
+    "transcriptName": "Theatre",
+    "fullName": "Theatre",
+    "groupName": "Group 6: The arts",
+    "groupNumber": 6,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "VISUAL_ARTS",
+    "transcriptName": "Visual Arts",
+    "fullName": "Visual Arts",
+    "groupName": "Group 6: The arts",
+    "groupNumber": 6,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "TOK",
+    "transcriptName": "TOK",
+    "fullName": "Theory of Knowledge",
+    "groupName": "Core: Theory of Knowledge",
+    "groupNumber": 0,
+    "slAvailable": false,
+    "hlAvailable": false,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "EE",
+    "transcriptName": "Extended Essay",
+    "fullName": "Extended Essay",
+    "groupName": "Core: Extended Essay",
+    "groupNumber": 0,
+    "slAvailable": false,
+    "hlAvailable": false,
+    "hasUnits": false
+  }
+]

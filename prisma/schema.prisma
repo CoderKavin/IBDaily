@@ -1,0 +1,149 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String                @id @default(cuid())
+  email                 String                @unique
+  password              String
+  name                  String?
+  onboardingCompleted   Boolean               @default(false)
+  activeCohortId        String?               // Currently active cohort (one at a time)
+  createdAt             DateTime              @default(now())
+  cohortMembers         CohortMember[]
+  submissions           Submission[]
+  userSubjects          UserSubject[]
+  weeklyUnitSelections  WeeklyUnitSelection[]
+  dailyQuestions        DailyQuestion[]
+}
+
+model Cohort {
+  id             String          @id @default(cuid())
+  name           String
+  joinCode       String          @unique
+  createdAt      DateTime        @default(now())
+  members        CohortMember[]
+  submissions    Submission[]
+  dailyQuestions DailyQuestion[]
+}
+
+model CohortMember {
+  id        String   @id @default(cuid())
+  userId    String
+  cohortId  String
+  joinedAt  DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cohort    Cohort   @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, cohortId])
+}
+
+model Submission {
+  id        String   @id @default(cuid())
+  userId    String
+  cohortId  String
+  dateKey   String   // YYYY-MM-DD in Asia/Kolkata
+  subjectId String?  // Reference to Subject (nullable for backward compat)
+  subject   String   // Display name (kept for backward compat)
+  bullet1   String
+  bullet2   String
+  bullet3   String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cohort    Cohort   @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, cohortId, dateKey])
+  @@index([cohortId, dateKey])
+}
+
+// Official IB Subject catalog
+model Subject {
+  id             String        @id @default(cuid())
+  subjectCode    String        @unique // e.g., "MATH_AA", "PHYSICS"
+  transcriptName String        // Short name for transcripts
+  fullName       String        // Full official name
+  groupName      String        // IB group: "Group 1", "Group 2", etc.
+  groupNumber    Int           // 1-6
+  slAvailable    Boolean       @default(true)
+  hlAvailable    Boolean       @default(true)
+  hasUnits       Boolean       @default(false) // Whether we have predefined units
+  createdAt      DateTime      @default(now())
+  units          Unit[]
+  userSubjects   UserSubject[]
+  weeklyUnitSelections WeeklyUnitSelection[]
+  dailyQuestions DailyQuestion[]
+}
+
+// Predefined units for select subjects
+model Unit {
+  id          String   @id @default(cuid())
+  subjectId   String
+  name        String
+  orderIndex  Int
+  levelScope  String   @default("BOTH") // "BOTH", "SL_ONLY", "HL_ONLY"
+  createdAt   DateTime @default(now())
+  subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  weeklyUnitSelections WeeklyUnitSelection[]
+  dailyQuestions       DailyQuestion[]
+
+  @@unique([subjectId, orderIndex])
+  @@index([subjectId])
+}
+
+// User's selected IB subjects
+model UserSubject {
+  id        String   @id @default(cuid())
+  userId    String
+  subjectId String
+  level     String   // "SL" or "HL"
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, subjectId])
+  @@index([userId])
+}
+
+// Weekly unit selection per subject
+model WeeklyUnitSelection {
+  id               String   @id @default(cuid())
+  userId           String
+  subjectId        String
+  unitId           String
+  weekStartDateKey String   // Monday date in YYYY-MM-DD (IST)
+  createdAt        DateTime @default(now())
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject          Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  unit             Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, subjectId, weekStartDateKey])
+  @@index([userId, weekStartDateKey])
+}
+
+// AI-generated daily question
+model DailyQuestion {
+  id                 String   @id @default(cuid())
+  userId             String
+  cohortId           String
+  dateKey            String   // YYYY-MM-DD in IST
+  subjectId          String
+  level              String   // "SL" or "HL"
+  unitId             String?
+  difficultyRung     Int      // 1=Recall, 2=Application, 3=Exam-style
+  questionText       String
+  markingGuideText   String
+  commonMistakesText String
+  createdAt          DateTime @default(now())
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cohort             Cohort   @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+  subject            Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  unit               Unit?    @relation(fields: [unitId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, cohortId, dateKey, subjectId])
+  @@index([userId, dateKey])
+}
