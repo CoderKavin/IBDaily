@@ -1,8 +1,28 @@
 [
   {
-    "subjectCode": "LANG_A_LIT",
-    "transcriptName": "Language A: Literature",
-    "fullName": "Language A: Literature",
+    "subjectCode": "EE",
+    "transcriptName": "Extended Essay",
+    "fullName": "Extended Essay",
+    "groupName": "Core: Extended Essay",
+    "groupNumber": 0,
+    "slAvailable": false,
+    "hlAvailable": false,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "TOK",
+    "transcriptName": "TOK",
+    "fullName": "Theory of Knowledge",
+    "groupName": "Core: Theory of Knowledge",
+    "groupNumber": 0,
+    "slAvailable": false,
+    "hlAvailable": false,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "ENGLISH_A_LIT",
+    "transcriptName": "English A: Literature",
+    "fullName": "English A: Literature",
     "groupName": "Group 1: Studies in language and literature",
     "groupNumber": 1,
     "slAvailable": true,
@@ -10,9 +30,369 @@
     "hasUnits": false
   },
   {
-    "subjectCode": "LANG_A_LANG_LIT",
-    "transcriptName": "Language A: Lang & Lit",
-    "fullName": "Language A: Language and Literature",
+    "subjectCode": "ENGLISH_A_LANG_LIT",
+    "transcriptName": "English A: Lang & Lit",
+    "fullName": "English A: Language and Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "SPANISH_A_LIT",
+    "transcriptName": "Spanish A: Literature",
+    "fullName": "Spanish A: Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "SPANISH_A_LANG_LIT",
+    "transcriptName": "Spanish A: Lang & Lit",
+    "fullName": "Spanish A: Language and Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "FRENCH_A_LIT",
+    "transcriptName": "French A: Literature",
+    "fullName": "French A: Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "FRENCH_A_LANG_LIT",
+    "transcriptName": "French A: Lang & Lit",
+    "fullName": "French A: Language and Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "GERMAN_A_LIT",
+    "transcriptName": "German A: Literature",
+    "fullName": "German A: Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "GERMAN_A_LANG_LIT",
+    "transcriptName": "German A: Lang & Lit",
+    "fullName": "German A: Language and Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "CHINESE_A_LIT",
+    "transcriptName": "Chinese A: Literature",
+    "fullName": "Chinese A: Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "CHINESE_A_LANG_LIT",
+    "transcriptName": "Chinese A: Lang & Lit",
+    "fullName": "Chinese A: Language and Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "JAPANESE_A_LIT",
+    "transcriptName": "Japanese A: Literature",
+    "fullName": "Japanese A: Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "JAPANESE_A_LANG_LIT",
+    "transcriptName": "Japanese A: Lang & Lit",
+    "fullName": "Japanese A: Language and Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "KOREAN_A_LIT",
+    "transcriptName": "Korean A: Literature",
+    "fullName": "Korean A: Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "KOREAN_A_LANG_LIT",
+    "transcriptName": "Korean A: Lang & Lit",
+    "fullName": "Korean A: Language and Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "ARABIC_A_LIT",
+    "transcriptName": "Arabic A: Literature",
+    "fullName": "Arabic A: Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "ARABIC_A_LANG_LIT",
+    "transcriptName": "Arabic A: Lang & Lit",
+    "fullName": "Arabic A: Language and Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "HINDI_A_LIT",
+    "transcriptName": "Hindi A: Literature",
+    "fullName": "Hindi A: Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "HINDI_A_LANG_LIT",
+    "transcriptName": "Hindi A: Lang & Lit",
+    "fullName": "Hindi A: Language and Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "PORTUGUESE_A_LIT",
+    "transcriptName": "Portuguese A: Literature",
+    "fullName": "Portuguese A: Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "PORTUGUESE_A_LANG_LIT",
+    "transcriptName": "Portuguese A: Lang & Lit",
+    "fullName": "Portuguese A: Language and Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "ITALIAN_A_LIT",
+    "transcriptName": "Italian A: Literature",
+    "fullName": "Italian A: Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "ITALIAN_A_LANG_LIT",
+    "transcriptName": "Italian A: Lang & Lit",
+    "fullName": "Italian A: Language and Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "DUTCH_A_LIT",
+    "transcriptName": "Dutch A: Literature",
+    "fullName": "Dutch A: Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "DUTCH_A_LANG_LIT",
+    "transcriptName": "Dutch A: Lang & Lit",
+    "fullName": "Dutch A: Language and Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "RUSSIAN_A_LIT",
+    "transcriptName": "Russian A: Literature",
+    "fullName": "Russian A: Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "RUSSIAN_A_LANG_LIT",
+    "transcriptName": "Russian A: Lang & Lit",
+    "fullName": "Russian A: Language and Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "TURKISH_A_LIT",
+    "transcriptName": "Turkish A: Literature",
+    "fullName": "Turkish A: Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "SWEDISH_A_LIT",
+    "transcriptName": "Swedish A: Literature",
+    "fullName": "Swedish A: Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "NORWEGIAN_A_LIT",
+    "transcriptName": "Norwegian A: Literature",
+    "fullName": "Norwegian A: Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "DANISH_A_LIT",
+    "transcriptName": "Danish A: Literature",
+    "fullName": "Danish A: Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "FINNISH_A_LIT",
+    "transcriptName": "Finnish A: Literature",
+    "fullName": "Finnish A: Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "POLISH_A_LIT",
+    "transcriptName": "Polish A: Literature",
+    "fullName": "Polish A: Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "THAI_A_LIT",
+    "transcriptName": "Thai A: Literature",
+    "fullName": "Thai A: Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "INDONESIAN_A_LIT",
+    "transcriptName": "Indonesian A: Literature",
+    "fullName": "Indonesian A: Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "MALAY_A_LIT",
+    "transcriptName": "Malay A: Literature",
+    "fullName": "Malay A: Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "VIETNAMESE_A_LIT",
+    "transcriptName": "Vietnamese A: Literature",
+    "fullName": "Vietnamese A: Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "HEBREW_A_LIT",
+    "transcriptName": "Hebrew A: Literature",
+    "fullName": "Hebrew A: Literature",
+    "groupName": "Group 1: Studies in language and literature",
+    "groupNumber": 1,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "GREEK_A_LIT",
+    "transcriptName": "Greek A: Literature",
+    "fullName": "Greek A: Literature",
     "groupName": "Group 1: Studies in language and literature",
     "groupNumber": 1,
     "slAvailable": true,
@@ -30,19 +410,9 @@
     "hasUnits": false
   },
   {
-    "subjectCode": "LANG_AB",
-    "transcriptName": "Language ab initio",
-    "fullName": "Language ab initio",
-    "groupName": "Group 2: Language acquisition",
-    "groupNumber": 2,
-    "slAvailable": true,
-    "hlAvailable": false,
-    "hasUnits": false
-  },
-  {
-    "subjectCode": "LANG_B",
-    "transcriptName": "Language B",
-    "fullName": "Language B",
+    "subjectCode": "SPANISH_B",
+    "transcriptName": "Spanish B",
+    "fullName": "Spanish B",
     "groupName": "Group 2: Language acquisition",
     "groupNumber": 2,
     "slAvailable": true,
@@ -50,9 +420,299 @@
     "hasUnits": false
   },
   {
-    "subjectCode": "CLASSICAL_LANG",
-    "transcriptName": "Classical Languages",
-    "fullName": "Classical Languages (Latin, Classical Greek)",
+    "subjectCode": "FRENCH_B",
+    "transcriptName": "French B",
+    "fullName": "French B",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "GERMAN_B",
+    "transcriptName": "German B",
+    "fullName": "German B",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "CHINESE_B",
+    "transcriptName": "Chinese B",
+    "fullName": "Chinese B (Mandarin)",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "JAPANESE_B",
+    "transcriptName": "Japanese B",
+    "fullName": "Japanese B",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "ITALIAN_B",
+    "transcriptName": "Italian B",
+    "fullName": "Italian B",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "ARABIC_B",
+    "transcriptName": "Arabic B",
+    "fullName": "Arabic B",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "RUSSIAN_B",
+    "transcriptName": "Russian B",
+    "fullName": "Russian B",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "HINDI_B",
+    "transcriptName": "Hindi B",
+    "fullName": "Hindi B",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "PORTUGUESE_B",
+    "transcriptName": "Portuguese B",
+    "fullName": "Portuguese B",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "DUTCH_B",
+    "transcriptName": "Dutch B",
+    "fullName": "Dutch B",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "KOREAN_B",
+    "transcriptName": "Korean B",
+    "fullName": "Korean B",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "DANISH_B",
+    "transcriptName": "Danish B",
+    "fullName": "Danish B",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "SWEDISH_B",
+    "transcriptName": "Swedish B",
+    "fullName": "Swedish B",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "NORWEGIAN_B",
+    "transcriptName": "Norwegian B",
+    "fullName": "Norwegian B",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "INDONESIAN_B",
+    "transcriptName": "Indonesian B",
+    "fullName": "Indonesian B",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "THAI_B",
+    "transcriptName": "Thai B",
+    "fullName": "Thai B",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "TURKISH_B",
+    "transcriptName": "Turkish B",
+    "fullName": "Turkish B",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "SWAHILI_B",
+    "transcriptName": "Swahili B",
+    "fullName": "Swahili B",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "SPANISH_AB",
+    "transcriptName": "Spanish ab initio",
+    "fullName": "Spanish ab initio",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": false,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "FRENCH_AB",
+    "transcriptName": "French ab initio",
+    "fullName": "French ab initio",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": false,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "GERMAN_AB",
+    "transcriptName": "German ab initio",
+    "fullName": "German ab initio",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": false,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "MANDARIN_AB",
+    "transcriptName": "Mandarin ab initio",
+    "fullName": "Mandarin ab initio",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": false,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "JAPANESE_AB",
+    "transcriptName": "Japanese ab initio",
+    "fullName": "Japanese ab initio",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": false,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "ITALIAN_AB",
+    "transcriptName": "Italian ab initio",
+    "fullName": "Italian ab initio",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": false,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "ARABIC_AB",
+    "transcriptName": "Arabic ab initio",
+    "fullName": "Arabic ab initio",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": false,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "RUSSIAN_AB",
+    "transcriptName": "Russian ab initio",
+    "fullName": "Russian ab initio",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": false,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "HINDI_AB",
+    "transcriptName": "Hindi ab initio",
+    "fullName": "Hindi ab initio",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": false,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "SWAHILI_AB",
+    "transcriptName": "Swahili ab initio",
+    "fullName": "Swahili ab initio",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": false,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "LATIN",
+    "transcriptName": "Latin",
+    "fullName": "Latin",
+    "groupName": "Group 2: Language acquisition",
+    "groupNumber": 2,
+    "slAvailable": true,
+    "hlAvailable": true,
+    "hasUnits": false
+  },
+  {
+    "subjectCode": "CLASSICAL_GREEK",
+    "transcriptName": "Classical Greek",
+    "fullName": "Classical Greek",
     "groupName": "Group 2: Language acquisition",
     "groupNumber": 2,
     "slAvailable": true,
@@ -103,16 +763,6 @@
     "subjectCode": "HISTORY",
     "transcriptName": "History",
     "fullName": "History",
-    "groupName": "Group 3: Individuals and societies",
-    "groupNumber": 3,
-    "slAvailable": true,
-    "hlAvailable": true,
-    "hasUnits": false
-  },
-  {
-    "subjectCode": "ITGS",
-    "transcriptName": "ITGS",
-    "fullName": "Information Technology in a Global Society",
     "groupName": "Group 3: Individuals and societies",
     "groupNumber": 3,
     "slAvailable": true,
@@ -297,26 +947,6 @@
     "groupNumber": 6,
     "slAvailable": true,
     "hlAvailable": true,
-    "hasUnits": false
-  },
-  {
-    "subjectCode": "TOK",
-    "transcriptName": "TOK",
-    "fullName": "Theory of Knowledge",
-    "groupName": "Core: Theory of Knowledge",
-    "groupNumber": 0,
-    "slAvailable": false,
-    "hlAvailable": false,
-    "hasUnits": false
-  },
-  {
-    "subjectCode": "EE",
-    "transcriptName": "Extended Essay",
-    "fullName": "Extended Essay",
-    "groupName": "Core: Extended Essay",
-    "groupNumber": 0,
-    "slAvailable": false,
-    "hlAvailable": false,
     "hasUnits": false
   }
 ]

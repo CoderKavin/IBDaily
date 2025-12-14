@@ -140,7 +140,7 @@ export class GeminiClient implements AiClient {
         commonMistakesText:
           parsed.commonMistakesText || "No common mistakes listed",
       };
-    } catch (parseError) {
+    } catch {
       console.error("Failed to parse Gemini response:", content);
       throw new Error("Failed to parse Gemini response as JSON");
     }
@@ -215,7 +215,7 @@ export class OpenAICompatibleClient implements AiClient {
         commonMistakesText:
           parsed.commonMistakesText || "No common mistakes listed",
       };
-    } catch (parseError) {
+    } catch {
       console.error("Failed to parse AI response:", content);
       throw new Error("Failed to parse AI response as JSON");
     }
@@ -284,7 +284,7 @@ export class AnthropicClient implements AiClient {
         commonMistakesText:
           parsed.commonMistakesText || "No common mistakes listed",
       };
-    } catch (parseError) {
+    } catch {
       console.error("Failed to parse Anthropic response:", content);
       throw new Error("Failed to parse Anthropic response as JSON");
     }

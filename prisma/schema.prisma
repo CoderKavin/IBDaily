@@ -10,11 +10,14 @@ datasource db {
 model User {
   id                    String                @id @default(cuid())
   email                 String                @unique
-  password              String
+  password              String                @default("")
+  firebaseUid           String?               @unique
   name                  String?
   onboardingCompleted   Boolean               @default(false)
+  onboardingStep        Int                   @default(0) // 0=not started, 1=cohort, 2=subjects, 3=units, 4=done
   activeCohortId        String?               // Currently active cohort (one at a time)
   stripeCustomerId      String?               @unique // Stripe customer ID
+  showExactRank         Boolean               @default(true) // Leaderboard preference
   createdAt             DateTime              @default(now())
   cohortMembers         CohortMember[]
   submissions           Submission[]
@@ -22,6 +25,9 @@ model User {
   weeklyUnitSelections  WeeklyUnitSelection[]
   dailyQuestions        DailyQuestion[]
   subscription          Subscription?
+  notificationPrefs     NotificationPrefs?
+  reminderLogs          ReminderLog[]
+  aiFeedbackReports     AIFeedbackReport[]
 }
 
 model Subscription {
@@ -39,6 +45,32 @@ model Subscription {
   @@index([status])
 }
 
+model NotificationPrefs {
+  id                          String   @id @default(cuid())
+  userId                      String   @unique
+  isEnabled                   Boolean  @default(true)
+  remindTimeMinutesBeforeCutoff Int     @default(90)  // 120, 90, 60
+  lastCallMinutesBeforeCutoff   Int     @default(15)  // 30, 15, 10
+  quietHoursStart             Int?     // Hour in IST (0-23), null = disabled
+  quietHoursEnd               Int?     // Hour in IST (0-23)
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+  user                        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ReminderLog {
+  id        String   @id @default(cuid())
+  userId    String
+  cohortId  String
+  dateKey   String   // YYYY-MM-DD in IST
+  type      String   // "REMIND" or "LAST_CALL"
+  sentAt    DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, cohortId, dateKey, type])
+  @@index([dateKey, type])
+}
+
 model Cohort {
   id             String          @id @default(cuid())
   name           String
@@ -53,33 +85,53 @@ model Cohort {
 }
 
 model CohortMember {
-  id        String   @id @default(cuid())
-  userId    String
-  cohortId  String
-  role      String   @default("MEMBER") // "OWNER", "MEMBER"
-  joinedAt  DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  cohort    Cohort   @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  userId     String
+  cohortId   String
+  role       String   @default("MEMBER") // "OWNER", "MEMBER"
+  joinedAt   DateTime @default(now())
+  bestStreak Int      @default(0)  // Personal best streak in this cohort
+  bestRank   Int?                  // Personal best rank (lowest = best), null until first rank
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cohort     Cohort   @relation(fields: [cohortId], references: [id], onDelete: Cascade)
 
   @@unique([userId, cohortId])
 }
 
 model Submission {
-  id        String   @id @default(cuid())
-  userId    String
-  cohortId  String
-  dateKey   String   // YYYY-MM-DD in Asia/Kolkata
-  subjectId String?  // Reference to Subject (nullable for backward compat)
-  subject   String   // Display name (kept for backward compat)
-  bullet1   String
-  bullet2   String
-  bullet3   String
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  cohort    Cohort   @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+  id             String   @id @default(cuid())
+  userId         String
+  cohortId       String
+  dateKey        String   // YYYY-MM-DD in Asia/Kolkata
+  subjectId      String?  // Reference to Subject (nullable for backward compat)
+  subject        String   // Display name (kept for backward compat)
+  bullet1        String
+  bullet2        String
+  bullet3        String
+  qualityStatus  String   @default("GOOD") // "GOOD" or "LOW_EFFORT"
+  qualityReasons String   @default("[]")   // JSON array of reasons
+  feedbackHidden Boolean  @default(false)  // User hid the AI feedback
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cohort         Cohort   @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+  feedbackReports AIFeedbackReport[]
 
   @@unique([userId, cohortId, dateKey])
   @@index([cohortId, dateKey])
+  @@index([qualityStatus])
+}
+
+model AIFeedbackReport {
+  id           String   @id @default(cuid())
+  userId       String
+  submissionId String
+  reason       String   // "WRONG", "CONFUSING", "TOO_HARSH", "OTHER"
+  notes        String?
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId])
 }
 
 // Official IB Subject catalog

@@ -1,8 +1,15 @@
-import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getIndiaDateKey } from "@/lib/timezone";
+import {
+  withAuthGet,
+  withAuth,
+  success,
+  errors,
+  requireParam,
+  throwError,
+} from "@/lib/api-utils";
+import { getIndiaDateKey, getYesterdayIndiaDateKey } from "@/lib/timezone";
 import { computeCohortStatus, type CohortStatus } from "@/lib/cohort-status";
+import { checkSubmissionQuality } from "@/lib/quality-check";
 
 /**
  * Check if cohort allows submissions (not LOCKED)
@@ -69,22 +76,8 @@ async function checkCohortCanSubmit(cohortId: string): Promise<{
 }
 
 // GET - get today's submission for a cohort
-export async function GET(request: NextRequest) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { searchParams } = new URL(request.url);
-  const cohortId = searchParams.get("cohortId");
-
-  if (!cohortId) {
-    return NextResponse.json(
-      { error: "cohortId is required" },
-      { status: 400 },
-    );
-  }
+export const GET = withAuthGet(async ({ session, searchParams }) => {
+  const cohortId = requireParam(searchParams, "cohortId");
 
   // Verify membership
   const membership = await prisma.cohortMember.findUnique({
@@ -97,10 +90,7 @@ export async function GET(request: NextRequest) {
   });
 
   if (!membership) {
-    return NextResponse.json(
-      { error: "Not a member of this cohort" },
-      { status: 403 },
-    );
+    return errors.notMember();
   }
 
   // Check cohort status
@@ -140,7 +130,7 @@ export async function GET(request: NextRequest) {
     select: { onboardingCompleted: true },
   });
 
-  return NextResponse.json({
+  return success({
     submission,
     subjects,
     todayKey,
@@ -149,31 +139,54 @@ export async function GET(request: NextRequest) {
     canSubmit: cohortCheck.canSubmit,
     lockReason: cohortCheck.reason,
   });
-}
+});
 
 // POST - create or update today's submission
-export async function POST(request: NextRequest) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { cohortId, subjectId, bullet1, bullet2, bullet3 } =
-    await request.json();
+export const POST = withAuth<{
+  cohortId: string;
+  subjectId: string;
+  bullet1: string;
+  bullet2: string;
+  bullet3: string;
+}>(async ({ session, body }) => {
+  const { cohortId, subjectId, bullet1, bullet2, bullet3 } = body;
 
   if (!cohortId || !subjectId || !bullet1 || !bullet2 || !bullet3) {
-    return NextResponse.json(
-      { error: "All fields are required" },
-      { status: 400 },
-    );
+    return errors.validation("All fields are required");
   }
 
-  // Validate bullet lengths
-  if (bullet1.length > 140 || bullet2.length > 140 || bullet3.length > 140) {
-    return NextResponse.json(
-      { error: "Each bullet must be 140 characters or less" },
-      { status: 400 },
+  const bullets = [bullet1, bullet2, bullet3];
+  const todayKey = getIndiaDateKey();
+
+  // Get yesterday's submission for similarity check
+  const yesterdayKey = getYesterdayIndiaDateKey();
+  const yesterdaySubmission = await prisma.submission.findUnique({
+    where: {
+      userId_cohortId_dateKey: {
+        userId: session.user.id,
+        cohortId,
+        dateKey: yesterdayKey,
+      },
+    },
+    select: { bullet1: true, bullet2: true, bullet3: true },
+  });
+
+  const yesterdayBullets = yesterdaySubmission
+    ? [
+        yesterdaySubmission.bullet1,
+        yesterdaySubmission.bullet2,
+        yesterdaySubmission.bullet3,
+      ]
+    : undefined;
+
+  // Run quality check
+  const qualityResult = checkSubmissionQuality(bullets, yesterdayBullets);
+
+  // Block submission if validation errors (hard requirements)
+  if (qualityResult.validationErrors.length > 0) {
+    return errors.validation(
+      "Submission does not meet requirements",
+      qualityResult.validationErrors,
     );
   }
 
@@ -188,24 +201,14 @@ export async function POST(request: NextRequest) {
   });
 
   if (!membership) {
-    return NextResponse.json(
-      { error: "Not a member of this cohort" },
-      { status: 403 },
-    );
+    return errors.notMember();
   }
 
   // Check if cohort allows submissions
   const cohortCheck = await checkCohortCanSubmit(cohortId);
 
   if (!cohortCheck.canSubmit) {
-    return NextResponse.json(
-      {
-        error: cohortCheck.reason || "Submissions are locked for this cohort",
-        cohortLocked: true,
-        cohortStatus: cohortCheck.status,
-      },
-      { status: 403 },
-    );
+    return errors.cohortLocked(cohortCheck.reason);
   }
 
   // Verify user has this subject and get display name
@@ -217,16 +220,12 @@ export async function POST(request: NextRequest) {
   });
 
   if (!userSubject) {
-    return NextResponse.json(
-      { error: "You don't have this subject" },
-      { status: 403 },
-    );
+    return errors.validation("You don't have this subject selected");
   }
 
   const subjectDisplayName = `${userSubject.subject.transcriptName} ${userSubject.level}`;
-  const todayKey = getIndiaDateKey();
 
-  // Upsert submission
+  // Upsert submission with quality status
   const submission = await prisma.submission.upsert({
     where: {
       userId_cohortId_dateKey: {
@@ -241,6 +240,8 @@ export async function POST(request: NextRequest) {
       bullet1,
       bullet2,
       bullet3,
+      qualityStatus: qualityResult.status,
+      qualityReasons: JSON.stringify(qualityResult.reasons),
       createdAt: new Date(),
     },
     create: {
@@ -252,8 +253,14 @@ export async function POST(request: NextRequest) {
       bullet1,
       bullet2,
       bullet3,
+      qualityStatus: qualityResult.status,
+      qualityReasons: JSON.stringify(qualityResult.reasons),
     },
   });
 
-  return NextResponse.json({ submission });
-}
+  return success({
+    submission,
+    qualityStatus: qualityResult.status,
+    qualityReasons: qualityResult.reasons,
+  });
+});

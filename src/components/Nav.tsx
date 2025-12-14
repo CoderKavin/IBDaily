@@ -13,39 +13,41 @@ function NavContent() {
   const navItems = cohortId
     ? [
         { href: `/submit?cohortId=${cohortId}`, label: "Submit" },
-        { href: `/units?cohortId=${cohortId}`, label: "Units" },
         { href: `/me?cohortId=${cohortId}`, label: "Progress" },
         { href: `/leaderboard?cohortId=${cohortId}`, label: "Rank" },
+        { href: `/units?cohortId=${cohortId}`, label: "Units" },
         { href: "/cohort", label: "Cohorts" },
-        { href: "/billing", label: "Billing" },
       ]
-    : [
-        { href: "/cohort", label: "Cohorts" },
-        { href: "/billing", label: "Billing" },
-      ];
+    : [{ href: "/cohort", label: "Cohorts" }];
 
   return (
-    <div className="flex items-center justify-between h-14">
-      <div className="flex items-center space-x-1 overflow-x-auto">
-        {navItems.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`px-3 py-2 text-sm font-medium rounded-md whitespace-nowrap ${
-              pathname === item.href.split("?")[0]
-                ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
-                : "text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
-            }`}
-          >
-            {item.label}
-          </Link>
-        ))}
+    <div className="flex items-center justify-between h-12">
+      <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide">
+        {navItems.map((item) => {
+          const isActive = pathname === item.href.split("?")[0];
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`
+                px-3 py-1.5 text-sm font-medium rounded-md whitespace-nowrap transition-colors
+                ${
+                  isActive
+                    ? "text-neutral-900 dark:text-white bg-neutral-100 dark:bg-neutral-800"
+                    : "text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white"
+                }
+              `}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
       </div>
       <button
         onClick={() => signOut({ callbackUrl: "/auth" })}
-        className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
+        className="px-3 py-1.5 text-sm text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white transition-colors"
       >
-        Logout
+        Sign out
       </button>
     </div>
   );
@@ -53,9 +55,9 @@ function NavContent() {
 
 export default function Nav() {
   return (
-    <nav className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-      <div className="max-w-4xl mx-auto px-4">
-        <Suspense fallback={<div className="h-14" />}>
+    <nav className="sticky top-0 z-40 bg-neutral-50/80 dark:bg-neutral-900/80 backdrop-blur-sm border-b border-neutral-200 dark:border-neutral-800">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6">
+        <Suspense fallback={<div className="h-12" />}>
           <NavContent />
         </Suspense>
       </div>

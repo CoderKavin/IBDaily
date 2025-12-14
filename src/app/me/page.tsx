@@ -3,17 +3,26 @@
 import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Nav from "@/components/Nav";
+import { PageContainer, Card, StatCard } from "@/components/ui";
 
 type CalendarDay = {
   dateKey: string;
   status: "on-time" | "late" | "missed";
 };
 
+type TodaySubmission = {
+  id: string;
+  dateKey: string;
+} | null;
+
 type ProgressData = {
   streak: number;
   calendar: CalendarDay[];
   todayKey: string;
+  todaySubmission: TodaySubmission;
   cohort: { id: string; name: string };
+  bestStreak: number;
+  bestRank: number | null;
 };
 
 function MeContent() {
@@ -46,11 +55,9 @@ function MeContent() {
     return (
       <>
         <Nav />
-        <div className="max-w-2xl mx-auto p-4">
-          <p className="text-gray-600 dark:text-gray-400">
-            Please select a cohort first.
-          </p>
-        </div>
+        <PageContainer>
+          <p className="text-neutral-500">Please select a cohort first.</p>
+        </PageContainer>
       </>
     );
   }
@@ -59,9 +66,11 @@ function MeContent() {
     return (
       <>
         <Nav />
-        <div className="max-w-2xl mx-auto p-4">
-          <p className="text-gray-600 dark:text-gray-400">Loading...</p>
-        </div>
+        <PageContainer>
+          <div className="flex items-center justify-center py-16">
+            <div className="w-5 h-5 border-2 border-neutral-300 border-t-neutral-600 rounded-full animate-spin" />
+          </div>
+        </PageContainer>
       </>
     );
   }
@@ -70,40 +79,12 @@ function MeContent() {
     return (
       <>
         <Nav />
-        <div className="max-w-2xl mx-auto p-4">
-          <p className="text-gray-600 dark:text-gray-400">
-            Failed to load progress.
-          </p>
-        </div>
+        <PageContainer>
+          <p className="text-neutral-500">Failed to load progress.</p>
+        </PageContainer>
       </>
     );
   }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "on-time":
-        return "bg-green-500";
-      case "late":
-        return "bg-yellow-500";
-      case "missed":
-        return "bg-red-300 dark:bg-red-800";
-      default:
-        return "bg-gray-300";
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case "on-time":
-        return "On-time";
-      case "late":
-        return "Late";
-      case "missed":
-        return "Missed";
-      default:
-        return status;
-    }
-  };
 
   // Group calendar by weeks for display
   const weeks: CalendarDay[][] = [];
@@ -111,110 +92,167 @@ function MeContent() {
     weeks.push(data.calendar.slice(i, i + 7));
   }
 
+  // Calculate stats
+  const onTimeCount = data.calendar.filter(
+    (d) => d.status === "on-time",
+  ).length;
+  const lateCount = data.calendar.filter((d) => d.status === "late").length;
+  const missedCount = data.calendar.filter((d) => d.status === "missed").length;
+
+  // Streak comparison - factual, not shaming
+  const streakDiff = data.bestStreak - data.streak;
+  const streakComparison =
+    streakDiff > 0
+      ? `${streakDiff} day${streakDiff !== 1 ? "s" : ""} from your best`
+      : data.streak > 0 && data.streak === data.bestStreak
+        ? "Personal best"
+        : undefined;
+
   return (
     <>
       <Nav />
-      <div className="max-w-2xl mx-auto p-4">
-        <div className="mb-6">
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-            My Progress
-          </h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+      <PageContainer>
+        {/* Header */}
+        <div className="mb-8">
+          <p className="text-xs font-medium uppercase tracking-wider text-neutral-400 mb-1">
             {data.cohort.name}
           </p>
+          <h1 className="text-2xl font-semibold text-neutral-900 dark:text-white">
+            Progress
+          </h1>
         </div>
 
-        <div className="mb-8 p-6 bg-white dark:bg-gray-800 rounded-lg shadow text-center">
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-            Current Streak
-          </p>
-          <p className="text-5xl font-bold text-blue-600 dark:text-blue-400">
-            {data.streak}
-          </p>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            day{data.streak !== 1 ? "s" : ""}
-          </p>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-          <h2 className="font-medium mb-4 text-gray-900 dark:text-white">
-            Last 30 Days
-          </h2>
-
-          <div className="flex items-center gap-4 mb-4 text-sm">
-            <div className="flex items-center gap-1">
-              <div className="w-4 h-4 rounded bg-green-500"></div>
-              <span className="text-gray-600 dark:text-gray-400">On-time</span>
+        {/* Primary Stats */}
+        <Card padding="lg">
+          <div className="grid grid-cols-3 gap-6">
+            <div className="text-center">
+              <StatCard
+                value={data.streak}
+                label={data.streak === 1 ? "day" : "days"}
+                sublabel={streakComparison}
+                size="lg"
+              />
             </div>
-            <div className="flex items-center gap-1">
-              <div className="w-4 h-4 rounded bg-yellow-500"></div>
-              <span className="text-gray-600 dark:text-gray-400">Late</span>
+            <div className="text-center border-l border-neutral-100 dark:border-neutral-700">
+              <StatCard
+                value={data.bestStreak}
+                label="best streak"
+                size="md"
+                muted={data.streak === data.bestStreak}
+              />
             </div>
-            <div className="flex items-center gap-1">
-              <div className="w-4 h-4 rounded bg-red-300 dark:bg-red-800"></div>
-              <span className="text-gray-600 dark:text-gray-400">Missed</span>
+            <div className="text-center border-l border-neutral-100 dark:border-neutral-700">
+              <StatCard
+                value={data.bestRank ? `#${data.bestRank}` : "—"}
+                label="best rank"
+                size="md"
+                muted={!data.bestRank}
+              />
+            </div>
+          </div>
+        </Card>
+
+        {/* Calendar Grid */}
+        <div className="mt-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
+              Last 30 days
+            </h2>
+            <div className="flex items-center gap-4 text-xs text-neutral-400">
+              <div className="flex items-center gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-sm bg-emerald-500" />
+                <span>On-time</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-sm bg-amber-400" />
+                <span>Late</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-sm bg-neutral-200 dark:bg-neutral-700" />
+                <span>Missed</span>
+              </div>
             </div>
           </div>
 
-          <div className="space-y-1">
-            {weeks.map((week, weekIdx) => (
-              <div key={weekIdx} className="flex gap-1">
-                {week.map((day) => (
-                  <div
-                    key={day.dateKey}
-                    className={`flex-1 aspect-square rounded ${getStatusColor(day.status)} relative group`}
-                    title={`${day.dateKey}: ${getStatusLabel(day.status)}`}
-                  >
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap pointer-events-none z-10">
-                      {day.dateKey}: {getStatusLabel(day.status)}
-                    </div>
-                  </div>
-                ))}
-                {/* Fill remaining slots if week is incomplete */}
-                {week.length < 7 &&
-                  Array(7 - week.length)
-                    .fill(null)
-                    .map((_, i) => (
+          <Card padding="md">
+            <div className="space-y-1.5">
+              {weeks.map((week, weekIdx) => (
+                <div key={weekIdx} className="flex gap-1.5">
+                  {week.map((day) => {
+                    const statusColor =
+                      day.status === "on-time"
+                        ? "bg-emerald-500"
+                        : day.status === "late"
+                          ? "bg-amber-400"
+                          : "bg-neutral-200 dark:bg-neutral-700";
+
+                    return (
                       <div
-                        key={`empty-${i}`}
-                        className="flex-1 aspect-square"
-                      ></div>
-                    ))}
-              </div>
-            ))}
-          </div>
+                        key={day.dateKey}
+                        className={`
+                          flex-1 aspect-square rounded-md ${statusColor}
+                          transition-transform hover:scale-105
+                          cursor-default
+                        `}
+                        title={day.dateKey}
+                      />
+                    );
+                  })}
+                  {/* Fill remaining slots if week is incomplete */}
+                  {week.length < 7 &&
+                    Array(7 - week.length)
+                      .fill(null)
+                      .map((_, i) => (
+                        <div
+                          key={`empty-${i}`}
+                          className="flex-1 aspect-square"
+                        />
+                      ))}
+                </div>
+              ))}
+            </div>
 
-          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <div className="grid grid-cols-3 gap-4 text-center text-sm">
-              <div>
-                <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                  {data.calendar.filter((d) => d.status === "on-time").length}
-                </p>
-                <p className="text-gray-600 dark:text-gray-400">On-time</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-                  {data.calendar.filter((d) => d.status === "late").length}
-                </p>
-                <p className="text-gray-600 dark:text-gray-400">Late</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-red-600 dark:text-red-400">
-                  {data.calendar.filter((d) => d.status === "missed").length}
-                </p>
-                <p className="text-gray-600 dark:text-gray-400">Missed</p>
+            {/* Summary stats */}
+            <div className="mt-6 pt-4 border-t border-neutral-100 dark:border-neutral-700/50">
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <p className="text-xl font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                    {onTimeCount}
+                  </p>
+                  <p className="text-xs text-neutral-500">on-time</p>
+                </div>
+                <div>
+                  <p className="text-xl font-semibold tabular-nums text-amber-600 dark:text-amber-400">
+                    {lateCount}
+                  </p>
+                  <p className="text-xs text-neutral-500">late</p>
+                </div>
+                <div>
+                  <p className="text-xl font-semibold tabular-nums text-neutral-400">
+                    {missedCount}
+                  </p>
+                  <p className="text-xs text-neutral-500">missed</p>
+                </div>
               </div>
             </div>
-          </div>
+          </Card>
         </div>
-      </div>
+      </PageContainer>
     </>
   );
 }
 
 export default function MePage() {
   return (
-    <Suspense fallback={<div className="p-4">Loading...</div>}>
+    <Suspense
+      fallback={
+        <PageContainer>
+          <div className="flex items-center justify-center py-16">
+            <div className="w-5 h-5 border-2 border-neutral-300 border-t-neutral-600 rounded-full animate-spin" />
+          </div>
+        </PageContainer>
+      }
+    >
       <MeContent />
     </Suspense>
   );

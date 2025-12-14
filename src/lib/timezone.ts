@@ -4,7 +4,6 @@
  */
 
 const INDIA_TZ = "Asia/Kolkata";
-const DEADLINE_HOUR = 21; // 9:00 PM IST
 
 /**
  * Get current date/time in India timezone
@@ -115,6 +114,15 @@ export function formatTimeRemaining(ms: number): string {
 }
 
 /**
+ * Get yesterday's dateKey in IST
+ */
+export function getYesterdayIndiaDateKey(date: Date = new Date()): string {
+  const yesterday = new Date(date);
+  yesterday.setDate(yesterday.getDate() - 1);
+  return getIndiaDateKey(yesterday);
+}
+
+/**
  * Get an array of dateKeys for the last N days (including today)
  */
 export function getLastNDays(n: number, fromDate: Date = new Date()): string[] {
@@ -151,4 +159,56 @@ export function getWeekEndDateKey(date: Date = new Date()): string {
   const [year, month, day] = mondayKey.split("-").map(Number);
   const sundayDate = new Date(year, month - 1, day + 6);
   return getIndiaDateKey(sundayDate);
+}
+
+/**
+ * At-risk detection constants
+ */
+const AT_RISK_MINUTES_BEFORE_DEADLINE = 60;
+
+/**
+ * Check if current time is within the at-risk window (60 minutes before deadline)
+ * Returns true if within 60 minutes of 9 PM IST and deadline has not passed
+ */
+export function isInAtRiskWindow(): boolean {
+  const timeRemaining = getTimeUntilDeadline();
+
+  // Not at risk if deadline has passed
+  if (timeRemaining === 0) {
+    return false;
+  }
+
+  // At risk if within 60 minutes of deadline
+  const minutesRemaining = timeRemaining / (1000 * 60);
+  return minutesRemaining <= AT_RISK_MINUTES_BEFORE_DEADLINE;
+}
+
+/**
+ * Get minutes remaining until deadline (for display)
+ * Returns -1 if deadline has passed
+ */
+export function getMinutesUntilDeadline(): number {
+  const timeRemaining = getTimeUntilDeadline();
+  if (timeRemaining === 0) {
+    return -1;
+  }
+  return Math.floor(timeRemaining / (1000 * 60));
+}
+
+/**
+ * Format minutes remaining as human readable string
+ */
+export function formatMinutesRemaining(minutes: number): string {
+  if (minutes <= 0) return "0 minutes";
+  if (minutes === 1) return "1 minute";
+  if (minutes < 60) return `${minutes} minutes`;
+
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+
+  if (mins === 0) {
+    return hours === 1 ? "1 hour" : `${hours} hours`;
+  }
+
+  return `${hours}h ${mins}m`;
 }

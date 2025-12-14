@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { Card, PrimaryButton } from "@/components/ui";
+import { signInWithEmail, signUpWithEmail } from "@/lib/firebase";
 
 export default function AuthPage() {
   const router = useRouter();
@@ -11,116 +13,171 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Check for session expired message
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const message = sessionStorage.getItem("authMessage");
+      if (message) {
+        setInfo(message);
+        sessionStorage.removeItem("authMessage");
+      }
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (loading) return; // Prevent double submit
+
     setError("");
+    setInfo("");
     setLoading(true);
 
     try {
+      let firebaseUser;
+
       if (isLogin) {
-        const result = await signIn("credentials", {
-          email,
-          password,
-          redirect: false,
-        });
-
-        if (result?.error) {
-          setError("Invalid email or password");
-        } else {
-          router.push("/cohort");
-          router.refresh();
-        }
+        // Sign in with Firebase
+        const userCredential = await signInWithEmail(email, password);
+        firebaseUser = userCredential.user;
       } else {
-        const res = await fetch("/api/signup", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, name }),
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          setError(data.error || "Signup failed");
-        } else {
-          // Auto-login after signup
-          const result = await signIn("credentials", {
-            email,
-            password,
-            redirect: false,
-          });
-
-          if (result?.error) {
-            setError("Account created. Please log in.");
-            setIsLogin(true);
-          } else {
-            router.push("/cohort");
-            router.refresh();
-          }
-        }
+        // Sign up with Firebase
+        const userCredential = await signUpWithEmail(email, password);
+        firebaseUser = userCredential.user;
       }
-    } catch {
-      setError("Something went wrong");
+
+      // Now sign in with NextAuth using Firebase credentials
+      const result = await signIn("credentials", {
+        email: firebaseUser.email,
+        firebaseUid: firebaseUser.uid,
+        name: name || firebaseUser.displayName || "",
+        redirect: false,
+      });
+
+      if (result?.error) {
+        setError("Authentication failed. Please try again.");
+      } else {
+        router.push("/cohort");
+        router.refresh();
+      }
+    } catch (err) {
+      // Handle Firebase auth errors
+      const firebaseError = err as { code?: string; message?: string };
+      switch (firebaseError.code) {
+        case "auth/user-not-found":
+        case "auth/wrong-password":
+        case "auth/invalid-credential":
+          setError("Invalid email or password");
+          break;
+        case "auth/email-already-in-use":
+          setError("Email already in use. Please log in.");
+          setIsLogin(true);
+          break;
+        case "auth/weak-password":
+          setError("Password should be at least 6 characters");
+          break;
+        case "auth/invalid-email":
+          setError("Invalid email address");
+          break;
+        case "auth/too-many-requests":
+          setError("Too many attempts. Please try again later.");
+          break;
+        case "auth/network-request-failed":
+          setError("Network error. Please check your connection.");
+          break;
+        default:
+          setError(
+            firebaseError.message || "Something went wrong. Please try again.",
+          );
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-bold text-center mb-2 text-gray-900 dark:text-white">
-          IBDaily
-        </h1>
-        <p className="text-center text-gray-600 dark:text-gray-400 mb-6">
-          Track your daily concept summaries
-        </p>
+        {/* Logo / Title */}
+        <div className="text-center mb-8">
+          <h1 className="text-2xl font-semibold text-neutral-900 dark:text-white">
+            IBDaily
+          </h1>
+          <p className="mt-1 text-sm text-neutral-500">
+            Track your daily concept summaries
+          </p>
+        </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <div className="flex mb-6">
+        <Card padding="lg">
+          {/* Session info message */}
+          {info && (
+            <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-lg">
+              <p className="text-sm text-amber-700 dark:text-amber-400">
+                {info}
+              </p>
+            </div>
+          )}
+
+          {/* Tabs */}
+          <div className="flex mb-6 border-b border-neutral-100 dark:border-neutral-700/50">
             <button
               type="button"
-              onClick={() => setIsLogin(true)}
-              className={`flex-1 py-2 text-sm font-medium border-b-2 ${
-                isLogin
-                  ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                  : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400"
-              }`}
+              onClick={() => {
+                setIsLogin(true);
+                setError("");
+              }}
+              className={`
+                flex-1 pb-3 text-sm font-medium border-b-2 -mb-px transition-colors
+                ${
+                  isLogin
+                    ? "border-neutral-900 dark:border-white text-neutral-900 dark:text-white"
+                    : "border-transparent text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
+                }
+              `}
             >
               Login
             </button>
             <button
               type="button"
-              onClick={() => setIsLogin(false)}
-              className={`flex-1 py-2 text-sm font-medium border-b-2 ${
-                !isLogin
-                  ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                  : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400"
-              }`}
+              onClick={() => {
+                setIsLogin(false);
+                setError("");
+              }}
+              className={`
+                flex-1 pb-3 text-sm font-medium border-b-2 -mb-px transition-colors
+                ${
+                  !isLogin
+                    ? "border-neutral-900 dark:border-white text-neutral-900 dark:text-white"
+                    : "border-transparent text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
+                }
+              `}
             >
               Sign Up
             </button>
           </div>
 
+          {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             {!isLogin && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-xs font-medium text-neutral-500 mb-1.5">
                   Name
                 </label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  className="w-full px-3 py-2 text-sm border border-neutral-200 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-900 dark:focus:ring-white"
                   placeholder="Your name"
                 />
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-xs font-medium text-neutral-500 mb-1.5">
                 Email
               </label>
               <input
@@ -128,13 +185,13 @@ export default function AuthPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                className="w-full px-3 py-2 text-sm border border-neutral-200 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-900 dark:focus:ring-white"
                 placeholder="you@example.com"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-xs font-medium text-neutral-500 mb-1.5">
                 Password
               </label>
               <input
@@ -143,22 +200,25 @@ export default function AuthPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={6}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                className="w-full px-3 py-2 text-sm border border-neutral-200 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-900 dark:focus:ring-white"
                 placeholder="Min 6 characters"
               />
             </div>
 
-            {error && <p className="text-red-500 text-sm">{error}</p>}
+            {error && (
+              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+            )}
 
-            <button
+            <PrimaryButton
               type="submit"
               disabled={loading}
-              className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-md transition"
+              loading={loading}
+              fullWidth
             >
-              {loading ? "..." : isLogin ? "Login" : "Sign Up"}
-            </button>
+              {isLogin ? "Login" : "Sign Up"}
+            </PrimaryButton>
           </form>
-        </div>
+        </Card>
       </div>
     </div>
   );

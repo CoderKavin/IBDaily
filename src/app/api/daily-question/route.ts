@@ -17,7 +17,10 @@ export async function GET(request: NextRequest) {
   const subjectId = searchParams.get("subjectId");
 
   if (!cohortId) {
-    return NextResponse.json({ error: "cohortId is required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "cohortId is required" },
+      { status: 400 },
+    );
   }
 
   const todayKey = getIndiaDateKey();
@@ -61,17 +64,26 @@ export async function POST(request: NextRequest) {
   }
 
   if (!isAiEnabled()) {
-    return NextResponse.json({ error: "AI features are not configured" }, { status: 503 });
+    return NextResponse.json(
+      { error: "AI features are not configured" },
+      { status: 503 },
+    );
   }
 
   const { cohortId, subjectId, difficultyRung = 1 } = await request.json();
 
   if (!cohortId || !subjectId) {
-    return NextResponse.json({ error: "cohortId and subjectId are required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "cohortId and subjectId are required" },
+      { status: 400 },
+    );
   }
 
   if (![1, 2, 3].includes(difficultyRung)) {
-    return NextResponse.json({ error: "difficultyRung must be 1, 2, or 3" }, { status: 400 });
+    return NextResponse.json(
+      { error: "difficultyRung must be 1, 2, or 3" },
+      { status: 400 },
+    );
   }
 
   // Verify membership
@@ -82,7 +94,10 @@ export async function POST(request: NextRequest) {
   });
 
   if (!membership) {
-    return NextResponse.json({ error: "Not a member of this cohort" }, { status: 403 });
+    return NextResponse.json(
+      { error: "Not a member of this cohort" },
+      { status: 403 },
+    );
   }
 
   // Verify user has this subject and get level
@@ -94,14 +109,17 @@ export async function POST(request: NextRequest) {
   });
 
   if (!userSubject) {
-    return NextResponse.json({ error: "You don't have this subject" }, { status: 403 });
+    return NextResponse.json(
+      { error: "You don't have this subject" },
+      { status: 403 },
+    );
   }
 
   const todayKey = getIndiaDateKey();
   const currentWeekStart = getWeekStartDateKey();
 
   // Get current week's unit selection
-  const weeklySelection = await prisma.weeklyUnitSelection.findUnique({
+  let weeklySelection = await prisma.weeklyUnitSelection.findUnique({
     where: {
       userId_subjectId_weekStartDateKey: {
         userId: session.user.id,
@@ -112,12 +130,40 @@ export async function POST(request: NextRequest) {
     include: { unit: true },
   });
 
-  // Check if subject has units - if so, require unit selection
+  // Carry-forward: if no selection this week, check last week
+  if (!weeklySelection && userSubject.subject.hasUnits) {
+    // Calculate previous week's start
+    const [year, month, day] = currentWeekStart.split("-").map(Number);
+    const prevWeekDate = new Date(year, month - 1, day - 7);
+    const prevWeekFormatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    const previousWeekStart = prevWeekFormatter.format(prevWeekDate);
+
+    weeklySelection = await prisma.weeklyUnitSelection.findUnique({
+      where: {
+        userId_subjectId_weekStartDateKey: {
+          userId: session.user.id,
+          subjectId,
+          weekStartDateKey: previousWeekStart,
+        },
+      },
+      include: { unit: true },
+    });
+  }
+
+  // Check if subject has units - if so, require unit selection (current or carried-forward)
   if (userSubject.subject.hasUnits && !weeklySelection) {
-    return NextResponse.json({
-      error: "Please select a weekly unit for this subject first",
-      needsUnitSelection: true,
-    }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: "Please select a weekly unit for this subject first",
+        needsUnitSelection: true,
+      },
+      { status: 400 },
+    );
   }
 
   // Check if question already exists for today
@@ -168,8 +214,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ question });
   } catch (error) {
     console.error("Question generation failed:", error);
-    return NextResponse.json({
-      error: error instanceof Error ? error.message : "Failed to generate question",
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to generate question",
+      },
+      { status: 500 },
+    );
   }
 }

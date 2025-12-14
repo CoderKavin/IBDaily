@@ -1,21 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { withAuthGet, success, errors, requireParam } from "@/lib/api-utils";
 
 // GET - get units for a subject
-export async function GET(request: NextRequest) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { searchParams } = new URL(request.url);
-  const subjectId = searchParams.get("subjectId");
-
-  if (!subjectId) {
-    return NextResponse.json({ error: "subjectId is required" }, { status: 400 });
-  }
+export const GET = withAuthGet(async ({ session, searchParams }) => {
+  const subjectId = requireParam(searchParams, "subjectId");
 
   // Verify user has this subject
   const userSubject = await prisma.userSubject.findUnique({
@@ -25,7 +13,7 @@ export async function GET(request: NextRequest) {
   });
 
   if (!userSubject) {
-    return NextResponse.json({ error: "You don't have this subject" }, { status: 403 });
+    return errors.validation("You don't have this subject");
   }
 
   const units = await prisma.unit.findMany({
@@ -39,5 +27,5 @@ export async function GET(request: NextRequest) {
     orderBy: { orderIndex: "asc" },
   });
 
-  return NextResponse.json({ units, level: userSubject.level });
-}
+  return success({ units, level: userSubject.level });
+});

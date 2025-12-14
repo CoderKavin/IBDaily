@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Nav from "@/components/Nav";
+import { PageContainer, Card } from "@/components/ui";
 
 type Unit = {
   id: string;
@@ -33,10 +34,13 @@ type WeeklySelection = {
 
 function UnitsContent() {
   const searchParams = useSearchParams();
-  const cohortId = searchParams.get("cohortId");
+  // cohortId available for future use
+  searchParams.get("cohortId");
 
   const [userSubjects, setUserSubjects] = useState<UserSubject[]>([]);
-  const [weeklySelections, setWeeklySelections] = useState<WeeklySelection[]>([]);
+  const [weeklySelections, setWeeklySelections] = useState<WeeklySelection[]>(
+    [],
+  );
   const [weekStartDateKey, setWeekStartDateKey] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
@@ -53,9 +57,8 @@ function UnitsContent() {
       const weeklyData = await weeklyRes.json();
 
       if (subjectsRes.ok) {
-        // Filter to only subjects with units
         const withUnits = subjectsData.userSubjects.filter(
-          (us: UserSubject) => us.subject.hasUnits
+          (us: UserSubject) => us.subject.hasUnits,
         );
         setUserSubjects(withUnits);
       }
@@ -91,7 +94,6 @@ function UnitsContent() {
       if (!res.ok) {
         setError(data.error || "Failed to save selection");
       } else {
-        // Refresh selections
         const weeklyRes = await fetch("/api/weekly-unit");
         const weeklyData = await weeklyRes.json();
         if (weeklyRes.ok) {
@@ -114,9 +116,11 @@ function UnitsContent() {
     return (
       <>
         <Nav />
-        <div className="max-w-2xl mx-auto p-4">
-          <p className="text-gray-600 dark:text-gray-400">Loading...</p>
-        </div>
+        <PageContainer>
+          <div className="flex items-center justify-center py-16">
+            <div className="w-5 h-5 border-2 border-neutral-300 border-t-neutral-600 rounded-full animate-spin" />
+          </div>
+        </PageContainer>
       </>
     );
   }
@@ -125,16 +129,19 @@ function UnitsContent() {
     return (
       <>
         <Nav />
-        <div className="max-w-2xl mx-auto p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 text-center">
-            <p className="text-gray-600 dark:text-gray-400 mb-2">
-              None of your subjects have predefined units.
-            </p>
-            <p className="text-sm text-gray-500 dark:text-gray-500">
-              Weekly unit selection is available for Math AA, Physics, and ESS.
-            </p>
-          </div>
-        </div>
+        <PageContainer>
+          <Card>
+            <div className="text-center py-4">
+              <p className="text-neutral-500 mb-2">
+                None of your subjects have predefined units.
+              </p>
+              <p className="text-sm text-neutral-400">
+                Weekly unit selection is available for Math AA, Physics, and
+                ESS.
+              </p>
+            </div>
+          </Card>
+        </PageContainer>
       </>
     );
   }
@@ -142,94 +149,116 @@ function UnitsContent() {
   return (
     <>
       <Nav />
-      <div className="max-w-2xl mx-auto p-4">
-        <div className="mb-6">
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-            Weekly Unit Focus
-          </h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+      <PageContainer>
+        {/* Header */}
+        <div className="mb-8">
+          <p className="text-xs font-medium uppercase tracking-wider text-neutral-400 mb-1">
             Week of {weekStartDateKey}
           </p>
+          <h1 className="text-2xl font-semibold text-neutral-900 dark:text-white">
+            Weekly Unit Focus
+          </h1>
         </div>
 
+        {/* Error */}
         {error && (
-          <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/30 rounded-lg">
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-lg">
             <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
           </div>
         )}
 
+        {/* Subject units */}
         <div className="space-y-6">
           {userSubjects.map((us) => {
             const selectedUnitId = getSelectedUnit(us.subjectId);
             const isSaving = saving === us.subjectId;
 
             return (
-              <div
-                key={us.id}
-                className="bg-white dark:bg-gray-800 rounded-lg shadow p-4"
-              >
-                <h2 className="font-medium text-gray-900 dark:text-white mb-3">
+              <div key={us.id}>
+                <h2 className="text-xs font-medium uppercase tracking-wider text-neutral-400 mb-3">
                   {us.subject.fullName} ({us.level})
                 </h2>
-                <div className="space-y-2">
-                  {us.subject.units
-                    .filter(
-                      (unit) =>
-                        unit.levelScope === "BOTH" ||
-                        (us.level === "HL" && unit.levelScope === "HL_ONLY") ||
-                        (us.level === "SL" && unit.levelScope === "SL_ONLY")
-                    )
-                    .map((unit) => {
-                      const isSelected = selectedUnitId === unit.id;
+                <Card padding="sm">
+                  <div className="divide-y divide-neutral-50 dark:divide-neutral-800">
+                    {us.subject.units
+                      .filter(
+                        (unit) =>
+                          unit.levelScope === "BOTH" ||
+                          (us.level === "HL" &&
+                            unit.levelScope === "HL_ONLY") ||
+                          (us.level === "SL" && unit.levelScope === "SL_ONLY"),
+                      )
+                      .map((unit) => {
+                        const isSelected = selectedUnitId === unit.id;
 
-                      return (
-                        <button
-                          key={unit.id}
-                          onClick={() => selectUnit(us.subjectId, unit.id)}
-                          disabled={isSaving}
-                          className={`w-full text-left p-3 rounded-lg border transition ${
-                            isSelected
-                              ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-                              : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
-                          } ${isSaving ? "opacity-50" : ""}`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span
-                              className={`text-sm ${
+                        return (
+                          <button
+                            key={unit.id}
+                            onClick={() => selectUnit(us.subjectId, unit.id)}
+                            disabled={isSaving}
+                            className={`
+                              w-full text-left py-3 px-2 -mx-2 rounded-lg transition-all
+                              ${
                                 isSelected
-                                  ? "text-blue-700 dark:text-blue-300 font-medium"
-                                  : "text-gray-700 dark:text-gray-300"
-                              }`}
-                            >
-                              {unit.orderIndex}. {unit.name}
-                            </span>
-                            {isSelected && (
-                              <span className="text-xs text-blue-600 dark:text-blue-400">
-                                Selected
+                                  ? "bg-neutral-100 dark:bg-neutral-700/50"
+                                  : "hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
+                              }
+                              ${isSaving ? "opacity-50" : ""}
+                            `}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span
+                                className={`
+                                  text-sm
+                                  ${
+                                    isSelected
+                                      ? "text-neutral-900 dark:text-white font-medium"
+                                      : "text-neutral-600 dark:text-neutral-400"
+                                  }
+                                `}
+                              >
+                                <span className="text-neutral-400 mr-1.5">
+                                  {unit.orderIndex}.
+                                </span>
+                                {unit.name}
                               </span>
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })}
-                </div>
+                              {isSelected && (
+                                <span className="text-xs text-neutral-500">
+                                  Selected
+                                </span>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                  </div>
+                </Card>
               </div>
             );
           })}
         </div>
 
-        <p className="mt-6 text-xs text-gray-500 dark:text-gray-500 text-center">
-          Your unit selection determines the focus of AI-generated practice questions.
-          You can change your selection once per week.
+        {/* Note */}
+        <p className="mt-6 text-xs text-neutral-400 text-center">
+          Your unit selection determines the focus of AI-generated practice
+          questions.
         </p>
-      </div>
+      </PageContainer>
     </>
   );
 }
 
 export default function UnitsPage() {
   return (
-    <Suspense fallback={<div className="p-4">Loading...</div>}>
+    <Suspense
+      fallback={
+        <PageContainer>
+          <div className="flex items-center justify-center py-16">
+            <div className="w-5 h-5 border-2 border-neutral-300 border-t-neutral-600 rounded-full animate-spin" />
+          </div>
+        </PageContainer>
+      }
+    >
       <UnitsContent />
     </Suspense>
   );

@@ -3,6 +3,9 @@
 import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Nav from "@/components/Nav";
+import { PageContainer, Card } from "@/components/ui";
+
+type LeaderboardTier = "TOP" | "MIDDLE" | "CATCHING_UP";
 
 type LeaderboardEntry = {
   userId: string;
@@ -11,6 +14,7 @@ type LeaderboardEntry = {
   currentStreak: number;
   onTimeCount30Days: number;
   rank: number;
+  tier: LeaderboardTier;
 };
 
 type LeaderboardData = {
@@ -49,11 +53,9 @@ function LeaderboardContent() {
     return (
       <>
         <Nav />
-        <div className="max-w-2xl mx-auto p-4">
-          <p className="text-gray-600 dark:text-gray-400">
-            Please select a cohort first.
-          </p>
-        </div>
+        <PageContainer>
+          <p className="text-neutral-500">Please select a cohort first.</p>
+        </PageContainer>
       </>
     );
   }
@@ -62,9 +64,11 @@ function LeaderboardContent() {
     return (
       <>
         <Nav />
-        <div className="max-w-2xl mx-auto p-4">
-          <p className="text-gray-600 dark:text-gray-400">Loading...</p>
-        </div>
+        <PageContainer>
+          <div className="flex items-center justify-center py-16">
+            <div className="w-5 h-5 border-2 border-neutral-300 border-t-neutral-600 rounded-full animate-spin" />
+          </div>
+        </PageContainer>
       </>
     );
   }
@@ -73,106 +77,197 @@ function LeaderboardContent() {
     return (
       <>
         <Nav />
-        <div className="max-w-2xl mx-auto p-4">
-          <p className="text-gray-600 dark:text-gray-400">
-            Failed to load leaderboard.
-          </p>
-        </div>
+        <PageContainer>
+          <p className="text-neutral-500">Failed to load leaderboard.</p>
+        </PageContainer>
       </>
     );
   }
 
-  const getRankDisplay = (rank: number) => {
-    if (rank === 1) return { emoji: "1st", color: "text-yellow-500" };
-    if (rank === 2) return { emoji: "2nd", color: "text-gray-400" };
-    if (rank === 3) return { emoji: "3rd", color: "text-amber-600" };
-    return { emoji: `${rank}th`, color: "text-gray-600 dark:text-gray-400" };
+  const getTierLabel = (tier: LeaderboardTier) => {
+    switch (tier) {
+      case "TOP":
+        return "Top 20%";
+      case "MIDDLE":
+        return "Middle";
+      case "CATCHING_UP":
+        return "Rising";
+    }
   };
+
+  // Find current user's data
+  const currentUserEntry = data.leaderboard.find(
+    (e) => e.userId === data.currentUserId,
+  );
 
   return (
     <>
       <Nav />
-      <div className="max-w-2xl mx-auto p-4">
-        <div className="mb-6">
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-            Leaderboard
-          </h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+      <PageContainer>
+        {/* Header */}
+        <div className="mb-8">
+          <p className="text-xs font-medium uppercase tracking-wider text-neutral-400 mb-1">
             {data.cohort.name}
           </p>
+          <h1 className="text-2xl font-semibold text-neutral-900 dark:text-white">
+            Leaderboard
+          </h1>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-          <div className="px-4 py-3 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
-            <div className="grid grid-cols-12 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+        {/* Current user's position - quick glance */}
+        {currentUserEntry && (
+          <div className="mb-6 flex items-center justify-between py-3 px-4 bg-neutral-100 dark:bg-neutral-800 rounded-lg">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl font-semibold tabular-nums text-neutral-900 dark:text-white">
+                #{currentUserEntry.rank}
+              </span>
+              <span className="text-sm text-neutral-500">Your position</span>
+            </div>
+            <div className="flex items-center gap-4 text-sm">
+              <div className="text-center">
+                <span className="font-semibold tabular-nums text-neutral-900 dark:text-white">
+                  {currentUserEntry.currentStreak}
+                </span>
+                <span className="ml-1 text-neutral-400">streak</span>
+              </div>
+              <div className="text-center">
+                <span className="font-semibold tabular-nums text-neutral-900 dark:text-white">
+                  {currentUserEntry.onTimeCount30Days}
+                </span>
+                <span className="ml-1 text-neutral-400">/ 30 days</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Leaderboard table */}
+        <Card padding="sm">
+          {/* Header row */}
+          <div className="px-4 py-2 border-b border-neutral-100 dark:border-neutral-700/50">
+            <div className="grid grid-cols-12 text-xs font-medium text-neutral-400 uppercase tracking-wide">
               <div className="col-span-1">#</div>
-              <div className="col-span-7">Name</div>
-              <div className="col-span-2 text-center">Streak</div>
-              <div className="col-span-2 text-center">30d</div>
+              <div className="col-span-6">Name</div>
+              <div className="col-span-2 text-right">Streak</div>
+              <div className="col-span-3 text-right">30 days</div>
             </div>
           </div>
 
-          <div className="divide-y divide-gray-200 dark:divide-gray-700">
+          {/* Entries */}
+          <div className="divide-y divide-neutral-50 dark:divide-neutral-800">
             {data.leaderboard.map((entry) => {
               const isCurrentUser = entry.userId === data.currentUserId;
-              const rankDisplay = getRankDisplay(entry.rank);
 
               return (
                 <div
                   key={entry.userId}
-                  className={`px-4 py-3 grid grid-cols-12 items-center ${
-                    isCurrentUser
-                      ? "bg-blue-50 dark:bg-blue-900/20"
-                      : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
-                  }`}
-                >
-                  <div className={`col-span-1 font-medium ${rankDisplay.color}`}>
-                    {rankDisplay.emoji}
-                  </div>
-                  <div className="col-span-7">
-                    <p className={`font-medium ${
+                  className={`
+                    px-4 py-3 grid grid-cols-12 items-center
+                    ${
                       isCurrentUser
-                        ? "text-blue-600 dark:text-blue-400"
-                        : "text-gray-900 dark:text-white"
-                    }`}>
-                      {entry.userName || entry.userEmail.split("@")[0]}
-                      {isCurrentUser && " (you)"}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                      {entry.userEmail}
-                    </p>
+                        ? "bg-neutral-50 dark:bg-neutral-700/30"
+                        : ""
+                    }
+                  `}
+                >
+                  {/* Rank */}
+                  <div className="col-span-1">
+                    <span
+                      className={`
+                        font-semibold tabular-nums
+                        ${
+                          entry.rank <= 3
+                            ? "text-neutral-900 dark:text-white"
+                            : "text-neutral-400"
+                        }
+                      `}
+                    >
+                      {entry.rank}
+                    </span>
                   </div>
-                  <div className="col-span-2 text-center">
-                    <span className="inline-flex items-center justify-center px-2 py-1 text-sm font-bold bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
+
+                  {/* Name & tier */}
+                  <div className="col-span-6">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`
+                          font-medium
+                          ${
+                            isCurrentUser
+                              ? "text-neutral-900 dark:text-white"
+                              : "text-neutral-700 dark:text-neutral-300"
+                          }
+                        `}
+                      >
+                        {entry.userName || entry.userEmail.split("@")[0]}
+                        {isCurrentUser && (
+                          <span className="ml-1.5 text-xs font-normal text-neutral-400">
+                            you
+                          </span>
+                        )}
+                      </span>
+                      {entry.tier === "TOP" && (
+                        <span className="px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-400 bg-neutral-100 dark:bg-neutral-700 rounded">
+                          {getTierLabel(entry.tier)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Streak */}
+                  <div className="col-span-2 text-right">
+                    <span
+                      className={`
+                        font-semibold tabular-nums
+                        ${
+                          entry.currentStreak > 0
+                            ? "text-neutral-900 dark:text-white"
+                            : "text-neutral-300 dark:text-neutral-600"
+                        }
+                      `}
+                    >
                       {entry.currentStreak}
                     </span>
                   </div>
-                  <div className="col-span-2 text-center text-sm text-gray-600 dark:text-gray-400">
-                    {entry.onTimeCount30Days}
+
+                  {/* 30-day count */}
+                  <div className="col-span-3 text-right">
+                    <span className="tabular-nums text-neutral-500">
+                      {entry.onTimeCount30Days}
+                    </span>
                   </div>
                 </div>
               );
             })}
 
             {data.leaderboard.length === 0 && (
-              <div className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+              <div className="px-4 py-12 text-center text-neutral-400">
                 No members yet.
               </div>
             )}
           </div>
-        </div>
+        </Card>
 
-        <p className="mt-4 text-xs text-gray-500 dark:text-gray-500 text-center">
-          Ranked by: current streak, then on-time submissions (last 30 days), then earliest submission time
+        {/* Ranking criteria - subtle */}
+        <p className="mt-4 text-xs text-neutral-400 text-center">
+          Ranked by streak, then on-time submissions (30 days), then earliest
+          submission
         </p>
-      </div>
+      </PageContainer>
     </>
   );
 }
 
 export default function LeaderboardPage() {
   return (
-    <Suspense fallback={<div className="p-4">Loading...</div>}>
+    <Suspense
+      fallback={
+        <PageContainer>
+          <div className="flex items-center justify-center py-16">
+            <div className="w-5 h-5 border-2 border-neutral-300 border-t-neutral-600 rounded-full animate-spin" />
+          </div>
+        </PageContainer>
+      }
+    >
       <LeaderboardContent />
     </Suspense>
   );

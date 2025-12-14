@@ -1,15 +1,8 @@
-import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { withAuthGet, success } from "@/lib/api-utils";
 
 // GET - list all subjects grouped by IB group
-export async function GET() {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const GET = withAuthGet(async () => {
   const subjects = await prisma.subject.findMany({
     orderBy: [{ groupNumber: "asc" }, { fullName: "asc" }],
     include: {
@@ -26,5 +19,5 @@ export async function GET() {
     grouped[subject.groupName].push(subject);
   }
 
-  return NextResponse.json({ subjects, grouped });
-}
+  return success({ subjects, grouped });
+});

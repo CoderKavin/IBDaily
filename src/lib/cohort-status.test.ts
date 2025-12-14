@@ -7,9 +7,6 @@ import {
   isSubscriptionActive,
   computeTrialEndDate,
   getActivationCounterText,
-  ACTIVATION_THRESHOLD,
-  TRIAL_DAYS,
-  COUNTER_VISIBILITY_THRESHOLD,
 } from "./cohort-status";
 
 function createDate(daysFromNow: number): Date {
@@ -31,8 +28,14 @@ console.log("=== Testing computeCohortStatus ===\n");
     memberCount: 2,
   });
   console.assert(result.status === "TRIAL", "New cohort should be TRIAL");
-  console.assert(result.canSubmit === true, "TRIAL cohort should allow submissions");
-  console.assert(result.showActivationCounter === false, "Counter hidden when paidCount < 4");
+  console.assert(
+    result.canSubmit === true,
+    "TRIAL cohort should allow submissions",
+  );
+  console.assert(
+    result.showActivationCounter === false,
+    "Counter hidden when paidCount < 4",
+  );
   console.log("1. New cohort in TRIAL: PASS");
 }
 
@@ -45,8 +48,14 @@ console.log("=== Testing computeCohortStatus ===\n");
     paidCount: 4,
     memberCount: 8,
   });
-  console.assert(result.status === "TRIAL", "Should still be TRIAL with 4 paid");
-  console.assert(result.showActivationCounter === true, "Counter should show when paidCount >= 4");
+  console.assert(
+    result.status === "TRIAL",
+    "Should still be TRIAL with 4 paid",
+  );
+  console.assert(
+    result.showActivationCounter === true,
+    "Counter should show when paidCount >= 4",
+  );
   console.log("2. Cohort with 4 paid members: PASS");
 }
 
@@ -59,8 +68,14 @@ console.log("=== Testing computeCohortStatus ===\n");
     paidCount: 6,
     memberCount: 10,
   });
-  console.assert(result.status === "ACTIVE", "Should become ACTIVE with 6 paid");
-  console.assert(result.canSubmit === true, "ACTIVE cohort should allow submissions");
+  console.assert(
+    result.status === "ACTIVE",
+    "Should become ACTIVE with 6 paid",
+  );
+  console.assert(
+    result.canSubmit === true,
+    "ACTIVE cohort should allow submissions",
+  );
   console.log("3. Cohort reaches 6 paid -> ACTIVE: PASS");
 }
 
@@ -73,9 +88,18 @@ console.log("=== Testing computeCohortStatus ===\n");
     paidCount: 3,
     memberCount: 5,
   });
-  console.assert(result.status === "LOCKED", "Should be LOCKED when trial expired");
-  console.assert(result.canSubmit === false, "LOCKED cohort should NOT allow submissions");
-  console.assert(result.isTrialExpired === true, "isTrialExpired should be true");
+  console.assert(
+    result.status === "LOCKED",
+    "Should be LOCKED when trial expired",
+  );
+  console.assert(
+    result.canSubmit === false,
+    "LOCKED cohort should NOT allow submissions",
+  );
+  console.assert(
+    result.isTrialExpired === true,
+    "isTrialExpired should be true",
+  );
   console.log("4. Trial expired without activation -> LOCKED: PASS");
 }
 
@@ -102,7 +126,10 @@ console.log("=== Testing computeCohortStatus ===\n");
     paidCount: 6,
     memberCount: 10,
   });
-  console.assert(result.status === "ACTIVE", "LOCKED can become ACTIVE with 6 paid");
+  console.assert(
+    result.status === "ACTIVE",
+    "LOCKED can become ACTIVE with 6 paid",
+  );
   console.log("6. LOCKED reactivated with 6 paid: PASS");
 }
 
@@ -115,8 +142,10 @@ console.log("=== Testing computeCohortStatus ===\n");
     paidCount: 0,
     memberCount: 2,
   });
-  console.assert(result.daysUntilTrialEnd >= 6 && result.daysUntilTrialEnd <= 8,
-    "Days until trial end should be ~7");
+  console.assert(
+    result.daysUntilTrialEnd >= 6 && result.daysUntilTrialEnd <= 8,
+    "Days until trial end should be ~7",
+  );
   console.log("7. Days until trial end: PASS");
 }
 
@@ -170,7 +199,7 @@ console.log("\n=== Testing computeTrialEndDate ===\n");
   const expected = new Date("2025-01-15T00:00:00Z");
   console.assert(
     trialEndsAt.getTime() === expected.getTime(),
-    `Trial should end 14 days after creation: got ${trialEndsAt.toISOString()}`
+    `Trial should end 14 days after creation: got ${trialEndsAt.toISOString()}`,
   );
   console.log("12. Trial end date calculation: PASS");
 }
@@ -180,18 +209,39 @@ console.log("\n=== Testing getActivationCounterText ===\n");
 
 // Test 13: Counter hidden when < 4
 {
-  console.assert(getActivationCounterText(0) === null, "Counter null when 0 paid");
-  console.assert(getActivationCounterText(1) === null, "Counter null when 1 paid");
-  console.assert(getActivationCounterText(2) === null, "Counter null when 2 paid");
-  console.assert(getActivationCounterText(3) === null, "Counter null when 3 paid");
+  console.assert(
+    getActivationCounterText(0) === null,
+    "Counter null when 0 paid",
+  );
+  console.assert(
+    getActivationCounterText(1) === null,
+    "Counter null when 1 paid",
+  );
+  console.assert(
+    getActivationCounterText(2) === null,
+    "Counter null when 2 paid",
+  );
+  console.assert(
+    getActivationCounterText(3) === null,
+    "Counter null when 3 paid",
+  );
   console.log("13. Counter hidden when < 4: PASS");
 }
 
 // Test 14: Counter shown when >= 4
 {
-  console.assert(getActivationCounterText(4) === "Activation: 4/6", "Counter shown at 4");
-  console.assert(getActivationCounterText(5) === "Activation: 5/6", "Counter shown at 5");
-  console.assert(getActivationCounterText(6) === "Activation: 6/6", "Counter shown at 6");
+  console.assert(
+    getActivationCounterText(4) === "Activation: 4/6",
+    "Counter shown at 4",
+  );
+  console.assert(
+    getActivationCounterText(5) === "Activation: 5/6",
+    "Counter shown at 5",
+  );
+  console.assert(
+    getActivationCounterText(6) === "Activation: 6/6",
+    "Counter shown at 6",
+  );
   console.log("14. Counter shown when >= 4: PASS");
 }
 

@@ -1,10 +1,15 @@
-import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  withAuthGet,
+  withAuth,
+  success,
+  errors,
+  requireParam,
+  throwError,
+} from "@/lib/api-utils";
 import {
   computeCohortStatus,
   computeTrialEndDate,
-  TRIAL_DAYS,
   type CohortStatus,
 } from "@/lib/cohort-status";
 
@@ -74,14 +79,7 @@ async function getCohortStatusInfo(cohortId: string) {
 }
 
 // GET - get user's active cohort and available cohorts
-export async function GET(request: NextRequest) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { searchParams } = new URL(request.url);
+export const GET = withAuthGet(async ({ session, searchParams }) => {
   const statusCohortId = searchParams.get("statusFor");
 
   // If requesting status for a specific cohort
@@ -94,14 +92,11 @@ export async function GET(request: NextRequest) {
     });
 
     if (!membership) {
-      return NextResponse.json(
-        { error: "Not a member of this cohort" },
-        { status: 403 },
-      );
+      return errors.notMember();
     }
 
     const statusInfo = await getCohortStatusInfo(statusCohortId);
-    return NextResponse.json({ statusInfo });
+    return success({ statusInfo });
   }
 
   const user = await prisma.user.findUnique({
@@ -144,31 +139,27 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({
+  return success({
     cohorts,
     activeCohort,
     activeCohortId: user?.activeCohortId,
     activeCohortStatus,
   });
-}
+});
 
 // POST - create, join, or set active cohort
-export async function POST(request: NextRequest) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { action, name, joinCode, cohortId } = await request.json();
+export const POST = withAuth<{
+  action: string;
+  name?: string;
+  joinCode?: string;
+  cohortId?: string;
+}>(async ({ session, body }) => {
+  const { action, name, joinCode, cohortId } = body;
 
   // Set active cohort
   if (action === "setActive") {
     if (!cohortId) {
-      return NextResponse.json(
-        { error: "cohortId is required" },
-        { status: 400 },
-      );
+      return errors.missingParam("cohortId");
     }
 
     // Verify user is a member
@@ -180,10 +171,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!membership) {
-      return NextResponse.json(
-        { error: "You are not a member of this cohort" },
-        { status: 403 },
-      );
+      return errors.notMember();
     }
 
     await prisma.user.update({
@@ -193,8 +181,7 @@ export async function POST(request: NextRequest) {
 
     const statusInfo = await getCohortStatusInfo(cohortId);
 
-    return NextResponse.json({
-      success: true,
+    return success({
       activeCohort: {
         id: membership.cohort.id,
         name: membership.cohort.name,
@@ -207,7 +194,7 @@ export async function POST(request: NextRequest) {
   // Create new cohort
   if (action === "create") {
     if (!name) {
-      return NextResponse.json({ error: "Name is required" }, { status: 400 });
+      return errors.missingParam("name");
     }
 
     // Generate unique join code
@@ -251,7 +238,7 @@ export async function POST(request: NextRequest) {
       return newCohort;
     });
 
-    return NextResponse.json({
+    return success({
       id: cohort.id,
       name: cohort.name,
       joinCode: cohort.joinCode,
@@ -264,10 +251,7 @@ export async function POST(request: NextRequest) {
   // Join existing cohort
   if (action === "join") {
     if (!joinCode) {
-      return NextResponse.json(
-        { error: "Join code is required" },
-        { status: 400 },
-      );
+      return errors.missingParam("joinCode");
     }
 
     const cohort = await prisma.cohort.findUnique({
@@ -275,7 +259,9 @@ export async function POST(request: NextRequest) {
     });
 
     if (!cohort) {
-      return NextResponse.json({ error: "Invalid join code" }, { status: 404 });
+      return errors.validation(
+        "Invalid join code. Please check and try again.",
+      );
     }
 
     // Check if already a member
@@ -295,7 +281,7 @@ export async function POST(request: NextRequest) {
         data: { activeCohortId: cohort.id },
       });
 
-      return NextResponse.json({
+      return success({
         id: cohort.id,
         name: cohort.name,
         joinCode: cohort.joinCode,
@@ -322,7 +308,7 @@ export async function POST(request: NextRequest) {
       });
     });
 
-    return NextResponse.json({
+    return success({
       id: cohort.id,
       name: cohort.name,
       joinCode: cohort.joinCode,
@@ -332,5 +318,5 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  return NextResponse.json({ error: "Invalid action" }, { status: 400 });
-}
+  return errors.validation("Invalid action");
+});

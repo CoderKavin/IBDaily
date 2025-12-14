@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Nav from "@/components/Nav";
+import { PageContainer, Card, PrimaryButton } from "@/components/ui";
 
 type SubscriptionInfo = {
   status: string;
@@ -64,7 +65,6 @@ function BillingContent() {
         return;
       }
 
-      // Redirect to Stripe Checkout
       if (result.url) {
         window.location.href = result.url;
       }
@@ -79,9 +79,11 @@ function BillingContent() {
     return (
       <>
         <Nav />
-        <div className="max-w-2xl mx-auto p-4">
-          <p className="text-gray-600 dark:text-gray-400">Loading...</p>
-        </div>
+        <PageContainer>
+          <div className="flex items-center justify-center py-16">
+            <div className="w-5 h-5 border-2 border-neutral-300 border-t-neutral-600 rounded-full animate-spin" />
+          </div>
+        </PageContainer>
       </>
     );
   }
@@ -97,81 +99,89 @@ function BillingContent() {
   return (
     <>
       <Nav />
-      <div className="max-w-2xl mx-auto p-4">
-        <h1 className="text-xl font-bold text-gray-900 dark:text-white mb-6">
-          Billing & Membership
-        </h1>
+      <PageContainer>
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-2xl font-semibold text-neutral-900 dark:text-white">
+            Membership
+          </h1>
+        </div>
 
+        {/* Success message */}
         {success && (
-          <div className="mb-6 p-4 bg-green-100 dark:bg-green-900/30 rounded-lg">
-            <p className="text-green-700 dark:text-green-400">
-              Payment successful! Your membership is now active.
+          <div className="mb-6 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 rounded-xl">
+            <p className="text-sm text-emerald-700 dark:text-emerald-400">
+              Payment successful. Your membership is now active.
             </p>
           </div>
         )}
 
+        {/* Canceled message */}
         {canceled && (
-          <div className="mb-6 p-4 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg">
-            <p className="text-yellow-700 dark:text-yellow-400">
+          <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-xl">
+            <p className="text-sm text-amber-700 dark:text-amber-400">
               Checkout was canceled. You can try again when ready.
             </p>
           </div>
         )}
 
+        {/* Error message */}
         {error && (
-          <div className="mb-6 p-4 bg-red-100 dark:bg-red-900/30 rounded-lg">
-            <p className="text-red-700 dark:text-red-400">{error}</p>
+          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-xl">
+            <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
           </div>
         )}
 
         {!data?.stripeConfigured ? (
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
-            <p className="text-gray-600 dark:text-gray-400">
+          <Card>
+            <p className="text-neutral-500">
               Payment system is not configured. Contact your administrator.
             </p>
-          </div>
+          </Card>
         ) : (
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
+          <Card padding="lg">
+            {/* Current status */}
             <div className="mb-6">
-              <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+              <p className="text-xs font-medium uppercase tracking-wider text-neutral-400 mb-2">
                 Current Plan
-              </h2>
+              </p>
 
               {data.isActive ? (
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                <div className="flex items-center gap-3">
+                  <span className="px-2 py-1 text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded">
                     Active
                   </span>
-                  <span className="text-gray-600 dark:text-gray-400">
+                  <span className="text-neutral-600 dark:text-neutral-400">
                     Monthly Membership
                   </span>
                 </div>
               ) : (
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+                <div className="flex items-center gap-3">
+                  <span className="px-2 py-1 text-xs font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-500 rounded">
                     Inactive
                   </span>
-                  <span className="text-gray-600 dark:text-gray-400">
+                  <span className="text-neutral-500">
                     No active subscription
                   </span>
                 </div>
               )}
             </div>
 
+            {/* Subscription details */}
             {data.subscription && (
-              <div className="mb-6 border-t border-gray-200 dark:border-gray-700 pt-4">
-                <dl className="space-y-2">
-                  <div className="flex justify-between">
-                    <dt className="text-gray-500 dark:text-gray-400">Status</dt>
-                    <dd className="text-gray-900 dark:text-white capitalize">
+              <div className="mb-6 pt-6 border-t border-neutral-100 dark:border-neutral-700/50">
+                <dl className="space-y-3">
+                  <div className="flex justify-between text-sm">
+                    <dt className="text-neutral-500">Status</dt>
+                    <dd className="text-neutral-900 dark:text-white capitalize">
                       {data.subscription.status}
                     </dd>
                   </div>
-                  <div className="flex justify-between">
-                    <dt className="text-gray-500 dark:text-gray-400">
+                  <div className="flex justify-between text-sm">
+                    <dt className="text-neutral-500">
                       {data.isActive ? "Renews" : "Expires"}
                     </dt>
-                    <dd className="text-gray-900 dark:text-white">
+                    <dd className="text-neutral-900 dark:text-white">
                       {formatDate(data.subscription.currentPeriodEnd)}
                     </dd>
                   </div>
@@ -179,39 +189,42 @@ function BillingContent() {
               </div>
             )}
 
+            {/* Activate button */}
             {!data.isActive && (
-              <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-                <h3 className="text-base font-medium text-gray-900 dark:text-white mb-2">
+              <div className="pt-6 border-t border-neutral-100 dark:border-neutral-700/50">
+                <h3 className="font-medium text-neutral-900 dark:text-white mb-2">
                   Activate Membership
                 </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                  Get unlimited access to daily submissions and help your cohort
-                  reach the activation threshold.
+                <p className="text-sm text-neutral-500 mb-4">
+                  Get unlimited access and help your cohort reach the activation
+                  threshold.
                 </p>
-                <button
+                <PrimaryButton
                   onClick={handleActivate}
                   disabled={checkoutLoading}
-                  className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-md font-medium"
+                  loading={checkoutLoading}
+                  fullWidth
                 >
-                  {checkoutLoading ? "Loading..." : "Activate Membership"}
-                </button>
+                  Activate Membership
+                </PrimaryButton>
               </div>
             )}
-          </div>
+          </Card>
         )}
 
-        <div className="mt-6 bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
-          <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+        {/* Info box */}
+        <div className="mt-6 p-4 bg-neutral-100 dark:bg-neutral-800/50 rounded-xl">
+          <h3 className="text-sm font-medium text-neutral-900 dark:text-white mb-2">
             How cohort activation works
           </h3>
-          <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-            <li>- New cohorts start with a 14-day trial period</li>
-            <li>- During trial, all members can submit normally</li>
-            <li>- Cohort unlocks permanently when 6 members activate</li>
-            <li>- If trial ends before activation, submissions pause</li>
+          <ul className="text-sm text-neutral-500 space-y-1">
+            <li>New cohorts start with a 14-day trial</li>
+            <li>During trial, all members can submit normally</li>
+            <li>Cohort unlocks permanently when 6 members activate</li>
+            <li>If trial ends before activation, submissions pause</li>
           </ul>
         </div>
-      </div>
+      </PageContainer>
     </>
   );
 }
@@ -222,9 +235,11 @@ export default function BillingPage() {
       fallback={
         <>
           <Nav />
-          <div className="max-w-2xl mx-auto p-4">
-            <p className="text-gray-600 dark:text-gray-400">Loading...</p>
-          </div>
+          <PageContainer>
+            <div className="flex items-center justify-center py-16">
+              <div className="w-5 h-5 border-2 border-neutral-300 border-t-neutral-600 rounded-full animate-spin" />
+            </div>
+          </PageContainer>
         </>
       }
     >

@@ -1,21 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { computeLeaderboard } from "@/lib/streak";
+import { withAuthGet, success, errors, requireParam } from "@/lib/api-utils";
+import { computeLeaderboard, updateBestRank } from "@/lib/streak";
 
-export async function GET(request: NextRequest) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { searchParams } = new URL(request.url);
-  const cohortId = searchParams.get("cohortId");
-
-  if (!cohortId) {
-    return NextResponse.json({ error: "cohortId is required" }, { status: 400 });
-  }
+export const GET = withAuthGet(async ({ session, searchParams }) => {
+  const cohortId = requireParam(searchParams, "cohortId");
 
   // Verify membership
   const membership = await prisma.cohortMember.findUnique({
@@ -31,12 +19,20 @@ export async function GET(request: NextRequest) {
   });
 
   if (!membership) {
-    return NextResponse.json({ error: "Not a member of this cohort" }, { status: 403 });
+    return errors.notMember();
   }
 
   const leaderboard = await computeLeaderboard(cohortId);
 
-  return NextResponse.json({
+  // Find current user's rank and update best rank if improved
+  const currentUserEntry = leaderboard.find(
+    (e) => e.userId === session.user.id,
+  );
+  if (currentUserEntry) {
+    await updateBestRank(session.user.id, cohortId, currentUserEntry.rank);
+  }
+
+  return success({
     leaderboard,
     cohort: {
       id: membership.cohort.id,
@@ -44,4 +40,4 @@ export async function GET(request: NextRequest) {
     },
     currentUserId: session.user.id,
   });
-}
+});

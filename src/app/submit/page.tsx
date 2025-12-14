@@ -3,6 +3,13 @@
 import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
+import {
+  PageContainer,
+  Card,
+  PrimaryButton,
+  WarningBanner,
+} from "@/components/ui";
+import { apiGet, apiPost, getErrorMessage } from "@/lib/api-client";
 
 type Subject = {
   id: string;
@@ -22,17 +29,33 @@ type Submission = {
   createdAt: string;
 };
 
-type DailyQuestion = {
-  id: string;
-  questionText: string;
-  markingGuideText: string;
-  commonMistakesText: string;
-  difficultyRung: number;
-  subject: { transcriptName: string };
-  unit: { name: string } | null;
+type CohortStatus = "TRIAL" | "ACTIVE" | "LOCKED";
+
+type SubmissionResponse = {
+  submission: Submission | null;
+  subjects: Subject[];
+  todayKey: string;
+  needsOnboarding: boolean;
+  cohortStatus: CohortStatus;
+  canSubmit: boolean;
+  lockReason?: string;
 };
 
-type CohortStatus = "TRIAL" | "ACTIVE" | "LOCKED";
+type MeResponse = {
+  streak: number;
+  calendar: unknown[];
+  todaySubmission: Submission | null;
+};
+
+type LeaderboardEntry = {
+  userId: string;
+  rank: number;
+};
+
+type LeaderboardResponse = {
+  leaderboard: LeaderboardEntry[];
+  currentUserId: string;
+};
 
 function SubmitContent() {
   const searchParams = useSearchParams();
@@ -47,59 +70,63 @@ function SubmitContent() {
   const [existingSubmission, setExistingSubmission] =
     useState<Submission | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [timeRemaining, setTimeRemaining] = useState("");
-  const [todayKey, setTodayKey] = useState("");
+  const [minutesLeft, setMinutesLeft] = useState<number | null>(null);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
-
-  // Cohort status
   const [cohortStatus, setCohortStatus] = useState<CohortStatus>("TRIAL");
   const [canSubmit, setCanSubmit] = useState(true);
   const [lockReason, setLockReason] = useState<string | undefined>();
 
-  // Daily question state
-  const [dailyQuestions, setDailyQuestions] = useState<DailyQuestion[]>([]);
-  const [aiEnabled, setAiEnabled] = useState(false);
-  const [generatingQuestion, setGeneratingQuestion] = useState(false);
-  const [selectedDifficulty, setSelectedDifficulty] = useState<1 | 2 | 3>(1);
+  // Fetch current streak and rank
+  const [streak, setStreak] = useState<number>(0);
+  const [rank, setRank] = useState<number | null>(null);
 
   const fetchSubmission = useCallback(async () => {
     if (!cohortId) return;
 
+    setLoadError("");
     try {
-      const res = await fetch(`/api/submission?cohortId=${cohortId}`);
-      const data = await res.json();
+      const [subData, meData] = await Promise.all([
+        apiGet<SubmissionResponse>("/api/submission", { cohortId }),
+        apiGet<MeResponse>("/api/me", { cohortId }),
+      ]);
 
-      if (res.ok) {
-        setSubjects(data.subjects || []);
-        setTodayKey(data.todayKey);
-        setNeedsOnboarding(data.needsOnboarding);
-        setCohortStatus(data.cohortStatus || "TRIAL");
-        setCanSubmit(data.canSubmit !== false);
-        setLockReason(data.lockReason);
+      setSubjects(subData.subjects || []);
+      setNeedsOnboarding(subData.needsOnboarding);
+      setCohortStatus(subData.cohortStatus || "TRIAL");
+      setCanSubmit(subData.canSubmit !== false);
+      setLockReason(subData.lockReason);
 
-        if (data.submission) {
-          setExistingSubmission(data.submission);
-          setSubjectId(data.submission.subjectId || "");
-          setBullet1(data.submission.bullet1);
-          setBullet2(data.submission.bullet2);
-          setBullet3(data.submission.bullet3);
+      if (subData.submission) {
+        setExistingSubmission(subData.submission);
+        setSubjectId(subData.submission.subjectId || "");
+        setBullet1(subData.submission.bullet1);
+        setBullet2(subData.submission.bullet2);
+        setBullet3(subData.submission.bullet3);
+      }
+
+      setStreak(meData.streak || 0);
+
+      // Fetch rank from leaderboard
+      try {
+        const lbData = await apiGet<LeaderboardResponse>("/api/leaderboard", {
+          cohortId,
+        });
+        const myEntry = lbData.leaderboard?.find(
+          (e) => e.userId === lbData.currentUserId,
+        );
+        if (myEntry) {
+          setRank(myEntry.rank);
         }
+      } catch {
+        // Leaderboard is non-critical, ignore errors
       }
-
-      // Fetch daily questions
-      const questionsRes = await fetch(
-        `/api/daily-question?cohortId=${cohortId}`,
-      );
-      const questionsData = await questionsRes.json();
-      if (questionsRes.ok) {
-        setDailyQuestions(questionsData.questions || []);
-        setAiEnabled(questionsData.aiEnabled);
-      }
-    } catch {
-      console.error("Failed to fetch submission");
+    } catch (err) {
+      setLoadError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -126,13 +153,18 @@ function SubmitContent() {
 
       if (diff <= 0) {
         setTimeRemaining("Deadline passed");
+        setMinutesLeft(null);
       } else {
         const hours = Math.floor(diff / (1000 * 60 * 60));
         const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-        setTimeRemaining(
-          `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`,
-        );
+        const totalMinutes = Math.floor(diff / (1000 * 60));
+        setMinutesLeft(totalMinutes);
+
+        if (hours > 0) {
+          setTimeRemaining(`${hours}h ${minutes}m`);
+        } else {
+          setTimeRemaining(`${minutes}m`);
+        }
       }
     };
 
@@ -143,100 +175,47 @@ function SubmitContent() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (submitting) return; // Prevent double submit
+
     setError("");
     setSuccess("");
     setSubmitting(true);
 
     try {
-      const res = await fetch("/api/submission", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          cohortId,
-          subjectId,
-          bullet1,
-          bullet2,
-          bullet3,
-        }),
+      const data = await apiPost<{
+        submission: Submission;
+        qualityStatus: string;
+      }>("/api/submission", {
+        cohortId,
+        subjectId,
+        bullet1,
+        bullet2,
+        bullet3,
       });
 
-      const data = await res.json();
+      setSuccess("Saved");
+      setExistingSubmission(data.submission);
 
-      if (!res.ok) {
-        if (data.cohortLocked) {
-          setCanSubmit(false);
-          setCohortStatus("LOCKED");
-          setLockReason(data.error);
-        }
-        setError(data.error);
-      } else {
-        setSuccess(existingSubmission ? "Updated!" : "Submitted!");
-        setExistingSubmission(data.submission);
+      // Refresh streak
+      try {
+        const meData = await apiGet<MeResponse>("/api/me", {
+          cohortId: cohortId!,
+        });
+        setStreak(meData.streak || 0);
+      } catch {
+        // Non-critical
       }
-    } catch {
-      setError("Failed to submit");
+    } catch (err) {
+      const message = getErrorMessage(err);
+      if (message.includes("Trial has ended") || message.includes("locked")) {
+        setCanSubmit(false);
+        setCohortStatus("LOCKED");
+        setLockReason(message);
+      }
+      setError(message);
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const generateQuestion = async () => {
-    if (!subjectId) {
-      setError("Please select a subject first");
-      return;
-    }
-
-    setGeneratingQuestion(true);
-    setError("");
-
-    try {
-      const res = await fetch("/api/daily-question", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          cohortId,
-          subjectId,
-          difficultyRung: selectedDifficulty,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        if (data.needsUnitSelection) {
-          setError(
-            "Please select a weekly unit for this subject first. Go to Units page.",
-          );
-        } else {
-          setError(data.error);
-        }
-      } else {
-        // Refresh questions
-        const questionsRes = await fetch(
-          `/api/daily-question?cohortId=${cohortId}`,
-        );
-        const questionsData = await questionsRes.json();
-        if (questionsRes.ok) {
-          setDailyQuestions(questionsData.questions || []);
-        }
-      }
-    } catch {
-      setError("Failed to generate question");
-    } finally {
-      setGeneratingQuestion(false);
-    }
-  };
-
-  const getDifficultyLabel = (rung: number) => {
-    switch (rung) {
-      case 1:
-        return "Recall";
-      case 2:
-        return "Application";
-      case 3:
-        return "Exam-style";
-      default:
-        return "Unknown";
     }
   };
 
@@ -244,11 +223,9 @@ function SubmitContent() {
     return (
       <>
         <Nav />
-        <div className="max-w-2xl mx-auto p-4">
-          <p className="text-gray-600 dark:text-gray-400">
-            Please select a cohort first.
-          </p>
-        </div>
+        <PageContainer>
+          <p className="text-neutral-500">Please select a cohort first.</p>
+        </PageContainer>
       </>
     );
   }
@@ -257,9 +234,28 @@ function SubmitContent() {
     return (
       <>
         <Nav />
-        <div className="max-w-2xl mx-auto p-4">
-          <p className="text-gray-600 dark:text-gray-400">Loading...</p>
-        </div>
+        <PageContainer>
+          <div className="space-y-4">
+            <div className="h-8 w-32 bg-neutral-200 dark:bg-neutral-800 rounded animate-pulse" />
+            <div className="h-48 bg-neutral-200 dark:bg-neutral-800 rounded-xl animate-pulse" />
+          </div>
+        </PageContainer>
+      </>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <>
+        <Nav />
+        <PageContainer size="sm">
+          <Card>
+            <div className="text-center py-4">
+              <p className="text-red-600 dark:text-red-400 mb-4">{loadError}</p>
+              <PrimaryButton onClick={fetchSubmission}>Try Again</PrimaryButton>
+            </div>
+          </Card>
+        </PageContainer>
       </>
     );
   }
@@ -268,341 +264,197 @@ function SubmitContent() {
     return (
       <>
         <Nav />
-        <div className="max-w-2xl mx-auto p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 text-center">
-            <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-              Set Up Your Subjects
-            </h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
-              Before you can submit, please select your IB subjects.
-            </p>
-            <button
-              onClick={() => router.push("/onboarding")}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md"
-            >
-              Select Subjects
-            </button>
-          </div>
-        </div>
+        <PageContainer size="sm">
+          <Card>
+            <div className="text-center py-4">
+              <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-2">
+                Set up your subjects
+              </h2>
+              <p className="text-sm text-neutral-500 mb-6">
+                Select your IB subjects to start submitting.
+              </p>
+              <PrimaryButton onClick={() => router.push("/onboarding")}>
+                Select Subjects
+              </PrimaryButton>
+            </div>
+          </Card>
+        </PageContainer>
       </>
     );
   }
 
-  // Show locked message if cohort is locked
   if (!canSubmit && cohortStatus === "LOCKED") {
     return (
       <>
         <Nav />
-        <div className="max-w-2xl mx-auto p-4">
-          <div className="mb-6">
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-              Daily Submission
-            </h1>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              {todayKey}
-            </p>
-          </div>
-
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0">
-                <svg
-                  className="h-6 w-6 text-red-600 dark:text-red-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth="1.5"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
-                  />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <h2 className="text-lg font-medium text-red-800 dark:text-red-200 mb-2">
-                  Submissions Paused
-                </h2>
-                <p className="text-red-700 dark:text-red-300 mb-4">
-                  {lockReason ||
-                    "The trial period has ended. Activate your membership to continue submitting."}
-                </p>
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    onClick={() => router.push("/billing")}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md"
-                  >
-                    Activate Membership
-                  </button>
-                  <button
-                    onClick={() => router.push("/me")}
-                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-medium rounded-md"
-                  >
-                    View History
-                  </button>
-                  <button
-                    onClick={() => router.push("/leaderboard")}
-                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-medium rounded-md"
-                  >
-                    View Leaderboard
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Show existing submission if any */}
-          {existingSubmission && (
-            <div className="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-              <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                Today&apos;s Submission
-              </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                {existingSubmission.subject}
+        <PageContainer size="sm">
+          <Card>
+            <div className="text-center py-4">
+              <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-2">
+                Submissions paused
+              </h2>
+              <p className="text-sm text-neutral-500 mb-6">
+                {lockReason || "Trial ended. Activate to continue."}
               </p>
-              <ul className="text-sm text-gray-700 dark:text-gray-300 space-y-1">
-                <li>• {existingSubmission.bullet1}</li>
-                <li>• {existingSubmission.bullet2}</li>
-                <li>• {existingSubmission.bullet3}</li>
-              </ul>
+              <PrimaryButton onClick={() => router.push("/billing")}>
+                Activate Membership
+              </PrimaryButton>
             </div>
-          )}
-        </div>
+          </Card>
+        </PageContainer>
       </>
     );
   }
 
+  const isAtRisk =
+    minutesLeft !== null && minutesLeft <= 60 && !existingSubmission;
+
   return (
     <>
       <Nav />
-      <div className="max-w-2xl mx-auto p-4">
-        <div className="mb-6">
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-            Daily Submission
-          </h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400">{todayKey}</p>
+      <PageContainer size="sm">
+        {/* Stats row */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-baseline gap-1">
+            <span className="text-4xl font-semibold tabular-nums text-neutral-900 dark:text-white">
+              {streak}
+            </span>
+            <span className="text-sm text-neutral-500">day streak</span>
+          </div>
+          <div className="text-right">
+            <div className="flex items-baseline gap-1 justify-end">
+              <span className="text-2xl font-semibold tabular-nums text-neutral-900 dark:text-white">
+                {timeRemaining}
+              </span>
+            </div>
+            <p className="text-xs text-neutral-400">until 9 PM IST</p>
+          </div>
         </div>
 
-        {/* Trial status banner */}
-        {cohortStatus === "TRIAL" && (
-          <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-            <p className="text-sm text-yellow-700 dark:text-yellow-300">
-              Your cohort is in trial mode. Submissions are enabled.
-            </p>
+        {/* At-risk warning */}
+        {isAtRisk && (
+          <div className="mb-6">
+            <WarningBanner emphasis={`${minutesLeft}m`}>
+              <span className="font-medium">At risk.</span> Submit now to
+              maintain your streak.
+            </WarningBanner>
           </div>
         )}
 
-        <div
-          className={`mb-6 p-4 rounded-lg ${
-            timeRemaining === "Deadline passed"
-              ? "bg-red-100 dark:bg-red-900/30"
-              : "bg-blue-100 dark:bg-blue-900/30"
-          }`}
-        >
-          <p className="text-sm text-gray-700 dark:text-gray-300">
-            Time until 9:00 PM IST deadline:
-          </p>
-          <p
-            className={`text-2xl font-mono font-bold ${
-              timeRemaining === "Deadline passed"
-                ? "text-red-600 dark:text-red-400"
-                : "text-blue-600 dark:text-blue-400"
-            }`}
-          >
-            {timeRemaining}
-          </p>
-        </div>
-
+        {/* Already submitted indicator */}
         {existingSubmission && (
-          <div className="mb-4 p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
-            <p className="text-sm text-green-700 dark:text-green-400">
-              You&apos;ve already submitted today. You can update your
-              submission below.
+          <div className="mb-6 px-4 py-3 bg-neutral-100 dark:bg-neutral-800 rounded-lg">
+            <p className="text-sm text-neutral-600 dark:text-neutral-400">
+              Submitted today. You can update until 9 PM.
             </p>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Subject
-            </label>
-            <select
-              value={subjectId}
-              onChange={(e) => setSubjectId(e.target.value)}
-              required
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            >
-              <option value="">Select a subject</option>
-              {subjects.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </div>
+        {/* Submission form */}
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <Card>
+            <div className="space-y-5">
+              {/* Subject selector */}
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                  Subject
+                </label>
+                <select
+                  value={subjectId}
+                  onChange={(e) => setSubjectId(e.target.value)}
+                  required
+                  className="
+                    w-full px-4 py-3
+                    text-sm text-neutral-900 dark:text-white
+                    bg-neutral-50 dark:bg-neutral-800
+                    border border-neutral-200 dark:border-neutral-700
+                    rounded-lg
+                    focus:outline-none focus:ring-2 focus:ring-neutral-900 dark:focus:ring-white focus:ring-offset-1
+                  "
+                >
+                  <option value="">Select subject</option>
+                  {subjects.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Bullet 1{" "}
-              <span className="text-gray-500">({bullet1.length}/140)</span>
-            </label>
-            <input
-              type="text"
-              value={bullet1}
-              onChange={(e) => setBullet1(e.target.value.slice(0, 140))}
-              required
-              maxLength={140}
-              placeholder="First key concept..."
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
-          </div>
+              {/* Bullet inputs */}
+              <div className="space-y-4">
+                {[
+                  { value: bullet1, setter: setBullet1, num: 1 },
+                  { value: bullet2, setter: setBullet2, num: 2 },
+                  { value: bullet3, setter: setBullet3, num: 3 },
+                ].map(({ value, setter, num }) => (
+                  <div key={num} className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                        Concept {num}
+                      </label>
+                      {value.length > 100 && (
+                        <span className="text-xs tabular-nums text-neutral-400">
+                          {value.length}/140
+                        </span>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      value={value}
+                      onChange={(e) => setter(e.target.value.slice(0, 140))}
+                      required
+                      placeholder="What did you learn?"
+                      className="
+                        w-full px-4 py-3
+                        text-sm text-neutral-900 dark:text-white
+                        placeholder:text-neutral-400
+                        bg-neutral-50 dark:bg-neutral-800
+                        border border-neutral-200 dark:border-neutral-700
+                        rounded-lg
+                        focus:outline-none focus:ring-2 focus:ring-neutral-900 dark:focus:ring-white focus:ring-offset-1
+                      "
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Card>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Bullet 2{" "}
-              <span className="text-gray-500">({bullet2.length}/140)</span>
-            </label>
-            <input
-              type="text"
-              value={bullet2}
-              onChange={(e) => setBullet2(e.target.value.slice(0, 140))}
-              required
-              maxLength={140}
-              placeholder="Second key concept..."
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
-          </div>
+          {/* Error/success states */}
+          {error && (
+            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          )}
+          {success && (
+            <p className="text-sm text-neutral-600 dark:text-neutral-400">
+              {success}
+            </p>
+          )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Bullet 3{" "}
-              <span className="text-gray-500">({bullet3.length}/140)</span>
-            </label>
-            <input
-              type="text"
-              value={bullet3}
-              onChange={(e) => setBullet3(e.target.value.slice(0, 140))}
-              required
-              maxLength={140}
-              placeholder="Third key concept..."
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
-          </div>
-
-          {error && <p className="text-red-500 text-sm">{error}</p>}
-          {success && <p className="text-green-500 text-sm">{success}</p>}
-
-          <button
+          {/* Submit button */}
+          <PrimaryButton
             type="submit"
+            loading={submitting}
             disabled={submitting}
-            className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-md transition"
+            fullWidth
           >
-            {submitting
-              ? "..."
-              : existingSubmission
-                ? "Update Submission"
-                : "Submit"}
-          </button>
+            {existingSubmission ? "Update" : "Submit"}
+          </PrimaryButton>
         </form>
 
-        {/* Daily Question Section */}
-        {existingSubmission && (
-          <div className="mt-8 space-y-4">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-              Today&apos;s Practice Question
-            </h2>
-
-            {!aiEnabled && (
-              <div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  AI question generation is not configured. Set GEMINI_API_KEY,
-                  OPENAI_API_KEY, or ANTHROPIC_API_KEY in .env to enable.
-                </p>
-              </div>
-            )}
-
-            {aiEnabled && dailyQuestions.length === 0 && (
-              <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow">
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                  Generate a practice question based on your selected subject
-                  and weekly unit focus.
-                </p>
-                <div className="flex items-center gap-3 mb-4">
-                  <label className="text-sm text-gray-700 dark:text-gray-300">
-                    Difficulty:
-                  </label>
-                  <select
-                    value={selectedDifficulty}
-                    onChange={(e) =>
-                      setSelectedDifficulty(Number(e.target.value) as 1 | 2 | 3)
-                    }
-                    className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                  >
-                    <option value={1}>Recall</option>
-                    <option value={2}>Application</option>
-                    <option value={3}>Exam-style</option>
-                  </select>
-                </div>
-                <button
-                  onClick={generateQuestion}
-                  disabled={generatingQuestion || !subjectId}
-                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white font-medium rounded-md transition"
-                >
-                  {generatingQuestion ? "Generating..." : "Generate Question"}
-                </button>
-              </div>
-            )}
-
-            {dailyQuestions.map((question) => (
-              <div
-                key={question.id}
-                className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden"
-              >
-                <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">
-                      {question.subject.transcriptName}
-                      {question.unit && ` - ${question.unit.name}`}
-                    </span>
-                    <span className="text-xs px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">
-                      {getDifficultyLabel(question.difficultyRung)}
-                    </span>
-                  </div>
-                  <p className="text-gray-800 dark:text-gray-200">
-                    {question.questionText}
-                  </p>
-                </div>
-
-                <details className="group">
-                  <summary className="px-4 py-3 cursor-pointer text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                    Show Marking Guide & Common Mistakes
-                  </summary>
-                  <div className="px-4 pb-4 space-y-3">
-                    <div>
-                      <h4 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">
-                        Marking Guide (Suggestions)
-                      </h4>
-                      <p className="text-sm text-gray-700 dark:text-gray-300">
-                        {question.markingGuideText}
-                      </p>
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">
-                        Common Mistakes to Watch For
-                      </h4>
-                      <p className="text-sm text-gray-700 dark:text-gray-300">
-                        {question.commonMistakesText}
-                      </p>
-                    </div>
-                  </div>
-                </details>
-              </div>
-            ))}
+        {/* Rank - secondary info */}
+        {rank && (
+          <div className="mt-8 pt-6 border-t border-neutral-200 dark:border-neutral-800 text-center">
+            <p className="text-sm text-neutral-500">
+              Currently ranked{" "}
+              <span className="font-medium text-neutral-900 dark:text-white">
+                #{rank}
+              </span>{" "}
+              in your cohort
+            </p>
           </div>
         )}
-      </div>
+      </PageContainer>
     </>
   );
 }

@@ -1,18 +1,17 @@
-import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  withAuthGet,
+  withAuth,
+  success,
+  errors,
+  throwError,
+} from "@/lib/api-utils";
 
 const MIN_SUBJECTS = 3;
 const MAX_SUBJECTS = 6;
 
 // GET - get user's selected subjects
-export async function GET() {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const GET = withAuthGet(async ({ session }) => {
   const userSubjects = await prisma.userSubject.findMany({
     where: { userId: session.user.id },
     include: {
@@ -32,66 +31,49 @@ export async function GET() {
     select: { onboardingCompleted: true },
   });
 
-  return NextResponse.json({
+  return success({
     userSubjects,
     onboardingCompleted: user?.onboardingCompleted ?? false,
     minSubjects: MIN_SUBJECTS,
     maxSubjects: MAX_SUBJECTS,
   });
-}
+});
 
 // POST - save user's subject selections (onboarding)
-export async function POST(request: NextRequest) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { selections } = await request.json();
+export const POST = withAuth<{
+  selections: Array<{ subjectId: string; level: string }>;
+}>(async ({ session, body }) => {
+  const { selections } = body;
 
   if (!Array.isArray(selections)) {
-    return NextResponse.json({ error: "Invalid selections" }, { status: 400 });
+    return errors.validation("Invalid selections format");
   }
 
   // Enforce 3-6 subjects
   if (selections.length < MIN_SUBJECTS) {
-    return NextResponse.json(
-      { error: `You must select at least ${MIN_SUBJECTS} subjects` },
-      { status: 400 },
+    return errors.validation(
+      `You must select at least ${MIN_SUBJECTS} subjects`,
     );
   }
 
   if (selections.length > MAX_SUBJECTS) {
-    return NextResponse.json(
-      { error: `You can select at most ${MAX_SUBJECTS} subjects` },
-      { status: 400 },
-    );
+    return errors.validation(`You can select at most ${MAX_SUBJECTS} subjects`);
   }
 
   // Validate selections
   for (const sel of selections) {
     if (!sel.subjectId || !sel.level) {
-      return NextResponse.json(
-        { error: "Each selection needs subjectId and level" },
-        { status: 400 },
-      );
+      return errors.validation("Each selection needs subjectId and level");
     }
     if (!["SL", "HL"].includes(sel.level)) {
-      return NextResponse.json(
-        { error: "Level must be SL or HL" },
-        { status: 400 },
-      );
+      return errors.validation("Level must be SL or HL");
     }
   }
 
   // Check for duplicate subjects
-  const subjectIds = selections.map((s: { subjectId: string }) => s.subjectId);
+  const subjectIds = selections.map((s) => s.subjectId);
   if (new Set(subjectIds).size !== subjectIds.length) {
-    return NextResponse.json(
-      { error: "Duplicate subjects not allowed" },
-      { status: 400 },
-    );
+    return errors.validation("Duplicate subjects not allowed");
   }
 
   // Verify all subjects exist and level is allowed
@@ -104,22 +86,13 @@ export async function POST(request: NextRequest) {
   for (const sel of selections) {
     const subject = subjectMap.get(sel.subjectId);
     if (!subject) {
-      return NextResponse.json(
-        { error: `Subject ${sel.subjectId} not found` },
-        { status: 400 },
-      );
+      return errors.notFound(`Subject ${sel.subjectId} not found`);
     }
     if (sel.level === "HL" && !subject.hlAvailable) {
-      return NextResponse.json(
-        { error: `${subject.fullName} is not available at HL` },
-        { status: 400 },
-      );
+      return errors.validation(`${subject.fullName} is not available at HL`);
     }
     if (sel.level === "SL" && !subject.slAvailable) {
-      return NextResponse.json(
-        { error: `${subject.fullName} is not available at SL` },
-        { status: 400 },
-      );
+      return errors.validation(`${subject.fullName} is not available at SL`);
     }
   }
 
@@ -130,7 +103,7 @@ export async function POST(request: NextRequest) {
     });
 
     await tx.userSubject.createMany({
-      data: selections.map((sel: { subjectId: string; level: string }) => ({
+      data: selections.map((sel) => ({
         userId: session.user.id,
         subjectId: sel.subjectId,
         level: sel.level,
@@ -143,5 +116,5 @@ export async function POST(request: NextRequest) {
     });
   });
 
-  return NextResponse.json({ success: true });
-}
+  return success({ saved: true });
+});
