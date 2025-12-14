@@ -8,7 +8,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { Prisma } from "@prisma/client";
 
 // Error codes for client handling
 export const ErrorCodes = {
@@ -126,24 +125,26 @@ export const errors = {
     error(ErrorCodes.INTERNAL_ERROR, message, 500),
 };
 
-// Map Prisma errors to API errors
-function mapPrismaError(err: Prisma.PrismaClientKnownRequestError): NextResponse<ApiErrorResponse> {
-  switch (err.code) {
-    case "P2002": // Unique constraint violation
-      return error(
-        ErrorCodes.DUPLICATE,
-        "This record already exists",
-        409,
-        { field: err.meta?.target }
-      );
-    case "P2025": // Record not found
-      return error(ErrorCodes.NOT_FOUND, "Record not found", 404);
-    case "P2003": // Foreign key constraint
-      return error(ErrorCodes.VALIDATION_ERROR, "Related record not found", 400);
-    default:
-      console.error(`[Prisma Error] Code: ${err.code}`, err.message);
-      return errors.internal();
+// Map Supabase errors to API errors
+function mapSupabaseError(err: { code?: string; message?: string }): NextResponse<ApiErrorResponse> {
+  const code = err.code || "";
+
+  if (code === "23505" || code.includes("duplicate")) {
+    return error(
+      ErrorCodes.DUPLICATE,
+      "This record already exists",
+      409
+    );
   }
+  if (code === "PGRST116" || code.includes("not found")) {
+    return error(ErrorCodes.NOT_FOUND, "Record not found", 404);
+  }
+  if (code === "23503") {
+    return error(ErrorCodes.VALIDATION_ERROR, "Related record not found", 400);
+  }
+
+  console.error(`[Supabase Error] Code: ${code}`, err.message);
+  return errors.internal();
 }
 
 // Session type with guaranteed user id
@@ -279,22 +280,10 @@ function handleError(
   // Extract route name from URL for logging
   const routeName = new URL(url).pathname;
 
-  // Handle Prisma known errors
-  if (err instanceof Prisma.PrismaClientKnownRequestError) {
-    console.error(`[${requestId}] ${routeName} - Prisma error:`, err.code);
-    return mapPrismaError(err);
-  }
-
-  // Handle Prisma validation errors
-  if (err instanceof Prisma.PrismaClientValidationError) {
-    console.error(`[${requestId}] ${routeName} - Prisma validation error`);
-    return error(ErrorCodes.VALIDATION_ERROR, "Invalid data format", 400);
-  }
-
-  // Handle Prisma connection errors
-  if (err instanceof Prisma.PrismaClientInitializationError) {
-    console.error(`[${requestId}] ${routeName} - Database connection error:`, err.message);
-    return error(ErrorCodes.DB_ERROR, "Database temporarily unavailable", 503);
+  // Handle Supabase errors (they have code and message properties)
+  if (err && typeof err === "object" && "code" in err) {
+    console.error(`[${requestId}] ${routeName} - Database error:`, (err as { code: string }).code);
+    return mapSupabaseError(err as { code?: string; message?: string });
   }
 
   // Handle custom API errors (re-thrown from handlers)
