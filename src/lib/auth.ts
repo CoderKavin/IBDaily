@@ -12,43 +12,49 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         name: { label: "Name", type: "text" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.firebaseUid) {
+        try {
+          if (!credentials?.email || !credentials?.firebaseUid) {
+            console.error("Auth: Missing email or firebaseUid");
+            return null;
+          }
+
+          const email = credentials.email as string;
+          const firebaseUid = credentials.firebaseUid as string;
+          const name = (credentials.name as string) || null;
+
+          // Find or create user based on Firebase UID
+          let user = await prisma.user.findUnique({
+            where: { email },
+          });
+
+          if (!user) {
+            // Create new user with Firebase UID
+            user = await prisma.user.create({
+              data: {
+                email,
+                firebaseUid,
+                name,
+                password: "", // Not used with Firebase auth
+                onboardingCompleted: false,
+              },
+            });
+          } else if (!user.firebaseUid) {
+            // Link existing user to Firebase
+            user = await prisma.user.update({
+              where: { id: user.id },
+              data: { firebaseUid },
+            });
+          }
+
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+          };
+        } catch (error) {
+          console.error("Auth authorize error:", error);
           return null;
         }
-
-        const email = credentials.email as string;
-        const firebaseUid = credentials.firebaseUid as string;
-        const name = (credentials.name as string) || null;
-
-        // Find or create user based on Firebase UID
-        let user = await prisma.user.findUnique({
-          where: { email },
-        });
-
-        if (!user) {
-          // Create new user with Firebase UID
-          user = await prisma.user.create({
-            data: {
-              email,
-              firebaseUid,
-              name,
-              password: "", // Not used with Firebase auth
-              onboardingCompleted: false,
-            },
-          });
-        } else if (!user.firebaseUid) {
-          // Link existing user to Firebase
-          user = await prisma.user.update({
-            where: { id: user.id },
-            data: { firebaseUid },
-          });
-        }
-
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-        };
       },
     }),
   ],
