@@ -147,19 +147,24 @@ async function seedDemoData() {
     });
   }
 
-  // Create a demo cohort
+  // Create a demo cohort (14 day trial from now)
+  const trialEndsAt = new Date();
+  trialEndsAt.setDate(trialEndsAt.getDate() + 14);
+
   const cohort = await prisma.cohort.upsert({
     where: { joinCode: "DEMO01" },
     update: {},
     create: {
       name: "IB Class 2025",
       joinCode: "DEMO01",
+      status: "TRIAL",
+      trialEndsAt,
     },
   });
 
   console.log("Created cohort:", cohort.name, "with code:", cohort.joinCode);
 
-  // Add users to cohort
+  // Add users to cohort (Alice is OWNER, Bob is MEMBER)
   await prisma.cohortMember.upsert({
     where: {
       userId_cohortId: { userId: user1.id, cohortId: cohort.id },
@@ -168,6 +173,7 @@ async function seedDemoData() {
     create: {
       userId: user1.id,
       cohortId: cohort.id,
+      role: "OWNER",
     },
   });
 
@@ -179,6 +185,7 @@ async function seedDemoData() {
     create: {
       userId: user2.id,
       cohortId: cohort.id,
+      role: "MEMBER",
     },
   });
 

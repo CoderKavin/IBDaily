@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  computeCohortStatus,
+  computeTrialEndDate,
+  TRIAL_DAYS,
+  type CohortStatus,
+} from "@/lib/cohort-status";
 
 function generateJoinCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -11,12 +17,91 @@ function generateJoinCode(): string {
   return code;
 }
 
+/**
+ * Compute cohort status info including paid member count
+ */
+async function getCohortStatusInfo(cohortId: string) {
+  const cohort = await prisma.cohort.findUnique({
+    where: { id: cohortId },
+    include: {
+      members: {
+        include: {
+          user: {
+            include: { subscription: true },
+          },
+        },
+      },
+    },
+  });
+
+  if (!cohort) return null;
+
+  const now = new Date();
+
+  // Count active subscriptions
+  const paidCount = cohort.members.filter((m) => {
+    const sub = m.user.subscription;
+    return sub && sub.status === "active" && sub.currentPeriodEnd > now;
+  }).length;
+
+  const statusInfo = computeCohortStatus({
+    currentStatus: cohort.status as CohortStatus,
+    trialEndsAt: cohort.trialEndsAt,
+    activatedAt: cohort.activatedAt,
+    paidCount,
+    memberCount: cohort.members.length,
+  });
+
+  // Update cohort status in DB if it changed
+  if (statusInfo.status !== cohort.status) {
+    await prisma.cohort.update({
+      where: { id: cohortId },
+      data: {
+        status: statusInfo.status,
+        activatedAt:
+          statusInfo.status === "ACTIVE" && !cohort.activatedAt
+            ? new Date()
+            : cohort.activatedAt,
+      },
+    });
+  }
+
+  return {
+    ...statusInfo,
+    cohortId,
+    cohortName: cohort.name,
+  };
+}
+
 // GET - get user's active cohort and available cohorts
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await auth();
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const statusCohortId = searchParams.get("statusFor");
+
+  // If requesting status for a specific cohort
+  if (statusCohortId) {
+    // Verify membership
+    const membership = await prisma.cohortMember.findUnique({
+      where: {
+        userId_cohortId: { userId: session.user.id, cohortId: statusCohortId },
+      },
+    });
+
+    if (!membership) {
+      return NextResponse.json(
+        { error: "Not a member of this cohort" },
+        { status: 403 },
+      );
+    }
+
+    const statusInfo = await getCohortStatusInfo(statusCohortId);
+    return NextResponse.json({ statusInfo });
   }
 
   const user = await prisma.user.findUnique({
@@ -42,14 +127,20 @@ export async function GET() {
     memberCount: m.cohort._count.members,
     joinedAt: m.joinedAt,
     isActive: m.cohort.id === user?.activeCohortId,
+    role: m.role,
+    status: m.cohort.status,
+    trialEndsAt: m.cohort.trialEndsAt,
   }));
 
-  // Get active cohort details
+  // Get active cohort details with status info
   let activeCohort = null;
+  let activeCohortStatus = null;
+
   if (user?.activeCohortId) {
     const active = cohorts.find((c) => c.id === user.activeCohortId);
     if (active) {
       activeCohort = active;
+      activeCohortStatus = await getCohortStatusInfo(user.activeCohortId);
     }
   }
 
@@ -57,6 +148,7 @@ export async function GET() {
     cohorts,
     activeCohort,
     activeCohortId: user?.activeCohortId,
+    activeCohortStatus,
   });
 }
 
@@ -99,6 +191,8 @@ export async function POST(request: NextRequest) {
       data: { activeCohortId: cohortId },
     });
 
+    const statusInfo = await getCohortStatusInfo(cohortId);
+
     return NextResponse.json({
       success: true,
       activeCohort: {
@@ -106,6 +200,7 @@ export async function POST(request: NextRequest) {
         name: membership.cohort.name,
         joinCode: membership.cohort.joinCode,
       },
+      statusInfo,
     });
   }
 
@@ -127,15 +222,21 @@ export async function POST(request: NextRequest) {
       attempts++;
     }
 
+    // Calculate trial end date
+    const trialEndsAt = computeTrialEndDate(new Date());
+
     // Create cohort and set as active
     const cohort = await prisma.$transaction(async (tx) => {
       const newCohort = await tx.cohort.create({
         data: {
           name,
           joinCode: code,
+          status: "TRIAL",
+          trialEndsAt,
           members: {
             create: {
               userId: session.user.id,
+              role: "OWNER",
             },
           },
         },
@@ -155,6 +256,8 @@ export async function POST(request: NextRequest) {
       name: cohort.name,
       joinCode: cohort.joinCode,
       isActive: true,
+      status: cohort.status,
+      trialEndsAt: cohort.trialEndsAt,
     });
   }
 
@@ -198,6 +301,8 @@ export async function POST(request: NextRequest) {
         joinCode: cohort.joinCode,
         isActive: true,
         alreadyMember: true,
+        status: cohort.status,
+        trialEndsAt: cohort.trialEndsAt,
       });
     }
 
@@ -207,6 +312,7 @@ export async function POST(request: NextRequest) {
         data: {
           userId: session.user.id,
           cohortId: cohort.id,
+          role: "MEMBER",
         },
       });
 
@@ -221,6 +327,8 @@ export async function POST(request: NextRequest) {
       name: cohort.name,
       joinCode: cohort.joinCode,
       isActive: true,
+      status: cohort.status,
+      trialEndsAt: cohort.trialEndsAt,
     });
   }
 

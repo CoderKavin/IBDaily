@@ -32,6 +32,8 @@ type DailyQuestion = {
   unit: { name: string } | null;
 };
 
+type CohortStatus = "TRIAL" | "ACTIVE" | "LOCKED";
+
 function SubmitContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -52,6 +54,11 @@ function SubmitContent() {
   const [todayKey, setTodayKey] = useState("");
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
+  // Cohort status
+  const [cohortStatus, setCohortStatus] = useState<CohortStatus>("TRIAL");
+  const [canSubmit, setCanSubmit] = useState(true);
+  const [lockReason, setLockReason] = useState<string | undefined>();
+
   // Daily question state
   const [dailyQuestions, setDailyQuestions] = useState<DailyQuestion[]>([]);
   const [aiEnabled, setAiEnabled] = useState(false);
@@ -69,6 +76,10 @@ function SubmitContent() {
         setSubjects(data.subjects || []);
         setTodayKey(data.todayKey);
         setNeedsOnboarding(data.needsOnboarding);
+        setCohortStatus(data.cohortStatus || "TRIAL");
+        setCanSubmit(data.canSubmit !== false);
+        setLockReason(data.lockReason);
+
         if (data.submission) {
           setExistingSubmission(data.submission);
           setSubjectId(data.submission.subjectId || "");
@@ -152,6 +163,11 @@ function SubmitContent() {
       const data = await res.json();
 
       if (!res.ok) {
+        if (data.cohortLocked) {
+          setCanSubmit(false);
+          setCohortStatus("LOCKED");
+          setLockReason(data.error);
+        }
         setError(data.error);
       } else {
         setSuccess(existingSubmission ? "Updated!" : "Submitted!");
@@ -272,6 +288,91 @@ function SubmitContent() {
     );
   }
 
+  // Show locked message if cohort is locked
+  if (!canSubmit && cohortStatus === "LOCKED") {
+    return (
+      <>
+        <Nav />
+        <div className="max-w-2xl mx-auto p-4">
+          <div className="mb-6">
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white">
+              Daily Submission
+            </h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {todayKey}
+            </p>
+          </div>
+
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0">
+                <svg
+                  className="h-6 w-6 text-red-600 dark:text-red-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth="1.5"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
+                  />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h2 className="text-lg font-medium text-red-800 dark:text-red-200 mb-2">
+                  Submissions Paused
+                </h2>
+                <p className="text-red-700 dark:text-red-300 mb-4">
+                  {lockReason ||
+                    "The trial period has ended. Activate your membership to continue submitting."}
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    onClick={() => router.push("/billing")}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md"
+                  >
+                    Activate Membership
+                  </button>
+                  <button
+                    onClick={() => router.push("/me")}
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-medium rounded-md"
+                  >
+                    View History
+                  </button>
+                  <button
+                    onClick={() => router.push("/leaderboard")}
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-medium rounded-md"
+                  >
+                    View Leaderboard
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Show existing submission if any */}
+          {existingSubmission && (
+            <div className="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+              <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                Today&apos;s Submission
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                {existingSubmission.subject}
+              </p>
+              <ul className="text-sm text-gray-700 dark:text-gray-300 space-y-1">
+                <li>• {existingSubmission.bullet1}</li>
+                <li>• {existingSubmission.bullet2}</li>
+                <li>• {existingSubmission.bullet3}</li>
+              </ul>
+            </div>
+          )}
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <Nav />
@@ -282,6 +383,15 @@ function SubmitContent() {
           </h1>
           <p className="text-sm text-gray-600 dark:text-gray-400">{todayKey}</p>
         </div>
+
+        {/* Trial status banner */}
+        {cohortStatus === "TRIAL" && (
+          <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+            <p className="text-sm text-yellow-700 dark:text-yellow-300">
+              Your cohort is in trial mode. Submissions are enabled.
+            </p>
+          </div>
+        )}
 
         <div
           className={`mb-6 p-4 rounded-lg ${
@@ -407,8 +517,8 @@ function SubmitContent() {
             {!aiEnabled && (
               <div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  AI question generation is not configured. Set OPENAI_API_KEY
-                  or ANTHROPIC_API_KEY in .env to enable.
+                  AI question generation is not configured. Set GEMINI_API_KEY,
+                  OPENAI_API_KEY, or ANTHROPIC_API_KEY in .env to enable.
                 </p>
               </div>
             )}

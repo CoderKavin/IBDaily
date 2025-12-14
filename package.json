@@ -10,7 +10,8 @@
     "db:migrate": "npx prisma migrate dev",
     "db:seed": "npx tsx prisma/seed.ts",
     "db:reset": "npx prisma migrate reset --force",
-    "test:tz": "npx tsx src/lib/timezone.test.ts"
+    "test:tz": "npx tsx src/lib/timezone.test.ts",
+    "test:cohort-status": "npx tsx src/lib/cohort-status.test.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -22,7 +23,11 @@
     "next-auth": "^5.0.0-beta.30",
     "prisma": "^5.22.0",
     "react": "19.2.1",
-    "react-dom": "19.2.1"
+    "react-dom": "19.2.1",
+    "stripe": "^20.0.0"
+  },
+  "prisma": {
+    "seed": "npx tsx prisma/seed.ts"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

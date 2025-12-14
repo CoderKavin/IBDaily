@@ -14,18 +14,38 @@ model User {
   name                  String?
   onboardingCompleted   Boolean               @default(false)
   activeCohortId        String?               // Currently active cohort (one at a time)
+  stripeCustomerId      String?               @unique // Stripe customer ID
   createdAt             DateTime              @default(now())
   cohortMembers         CohortMember[]
   submissions           Submission[]
   userSubjects          UserSubject[]
   weeklyUnitSelections  WeeklyUnitSelection[]
   dailyQuestions        DailyQuestion[]
+  subscription          Subscription?
+}
+
+model Subscription {
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  stripeCustomerId     String
+  stripeSubscriptionId String   @unique
+  status               String   // "active", "canceled", "past_due", "incomplete", etc.
+  currentPeriodEnd     DateTime
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([stripeSubscriptionId])
+  @@index([status])
 }
 
 model Cohort {
   id             String          @id @default(cuid())
   name           String
   joinCode       String          @unique
+  status         String          @default("TRIAL") // "TRIAL", "ACTIVE", "LOCKED"
+  trialEndsAt    DateTime        // 14 days from createdAt
+  activatedAt    DateTime?       // When cohort became ACTIVE (null if never)
   createdAt      DateTime        @default(now())
   members        CohortMember[]
   submissions    Submission[]
@@ -36,6 +56,7 @@ model CohortMember {
   id        String   @id @default(cuid())
   userId    String
   cohortId  String
+  role      String   @default("MEMBER") // "OWNER", "MEMBER"
   joinedAt  DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   cohort    Cohort   @relation(fields: [cohortId], references: [id], onDelete: Cascade)

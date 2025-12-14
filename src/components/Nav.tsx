@@ -17,8 +17,12 @@ function NavContent() {
         { href: `/me?cohortId=${cohortId}`, label: "Progress" },
         { href: `/leaderboard?cohortId=${cohortId}`, label: "Rank" },
         { href: "/cohort", label: "Cohorts" },
+        { href: "/billing", label: "Billing" },
       ]
-    : [{ href: "/cohort", label: "Cohorts" }];
+    : [
+        { href: "/cohort", label: "Cohorts" },
+        { href: "/billing", label: "Billing" },
+      ];
 
   return (
     <div className="flex items-center justify-between h-14">
