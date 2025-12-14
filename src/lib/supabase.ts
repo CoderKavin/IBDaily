@@ -1,23 +1,54 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-// Client for browser/public operations
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Lazy initialization to avoid build-time errors
+let _supabase: SupabaseClient | null = null;
+let _supabaseAdmin: SupabaseClient | null = null;
 
-// Admin client for server-side operations (bypasses RLS)
-export const supabaseAdmin = createClient(
-  supabaseUrl,
-  supabaseServiceKey || supabaseAnonKey,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
+function getSupabaseClient(): SupabaseClient {
+  if (!_supabase) {
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Supabase URL and Anon Key are required');
+    }
+    _supabase = createClient(supabaseUrl, supabaseAnonKey);
   }
-);
+  return _supabase;
+}
+
+function getSupabaseAdmin(): SupabaseClient {
+  if (!_supabaseAdmin) {
+    if (!supabaseUrl) {
+      throw new Error('Supabase URL is required');
+    }
+    _supabaseAdmin = createClient(
+      supabaseUrl,
+      supabaseServiceKey || supabaseAnonKey,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    );
+  }
+  return _supabaseAdmin;
+}
+
+// Export getters that lazily initialize
+export const supabase = new Proxy({} as SupabaseClient, {
+  get(_, prop) {
+    return (getSupabaseClient() as unknown as Record<string, unknown>)[prop as string];
+  },
+});
+
+export const supabaseAdmin = new Proxy({} as SupabaseClient, {
+  get(_, prop) {
+    return (getSupabaseAdmin() as unknown as Record<string, unknown>)[prop as string];
+  },
+});
 
 // Helper to generate CUID-like IDs
 export function generateId(): string {
