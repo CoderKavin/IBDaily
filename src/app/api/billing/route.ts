@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { isStripeConfigured } from "@/lib/stripe";
 import { isSubscriptionActive } from "@/lib/cohort-status";
 
@@ -12,27 +12,29 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    include: { subscription: true },
-  });
+  const user = await db.users.findUnique({ id: session.user.id });
 
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const isActive = isSubscriptionActive(user.subscription);
+  const subscription = await db.subscriptions.findByUser(session.user.id);
+
+  const isActive = isSubscriptionActive(subscription ? {
+    status: subscription.status,
+    currentPeriodEnd: new Date(subscription.current_period_end),
+  } : null);
 
   return NextResponse.json({
     stripeConfigured: isStripeConfigured(),
-    subscription: user.subscription
+    subscription: subscription
       ? {
-          status: user.subscription.status,
-          currentPeriodEnd: user.subscription.currentPeriodEnd,
+          status: subscription.status,
+          currentPeriodEnd: subscription.current_period_end,
           isActive,
         }
       : null,
-    hasSubscription: !!user.subscription,
+    hasSubscription: !!subscription,
     isActive,
   });
 }

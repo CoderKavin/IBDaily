@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
+import { supabaseAdmin } from "@/lib/supabase";
 import { getIndiaDateKey, getLastNDays } from "@/lib/timezone";
 
 interface DailyStats {
@@ -23,18 +24,18 @@ interface MemberHealth {
 }
 
 interface RetentionMetrics {
-  d1: number; // % of members who submitted on day 1 and day 2
-  d3: number; // % of members who submitted on day 1 and day 4
-  d7: number; // % of members who submitted on day 1 and day 8
+  d1: number;
+  d3: number;
+  d7: number;
 }
 
 interface CohortHealthData {
   cohortId: string;
   cohortName: string;
   totalMembers: number;
-  activeMembers: number; // Submitted in last 7 days
-  atRiskMembers: number; // 3-7 days without submission
-  inactiveMembers: number; // 7+ days without submission
+  activeMembers: number;
+  atRiskMembers: number;
+  inactiveMembers: number;
   todaySubmissionRate: number;
   weeklyAverageRate: number;
   dailyStats: DailyStats[];
@@ -60,16 +61,9 @@ export async function GET(request: NextRequest) {
   }
 
   // Verify user is the owner of this cohort
-  const membership = await prisma.cohortMember.findUnique({
-    where: {
-      userId_cohortId: {
-        userId: session.user.id,
-        cohortId,
-      },
-    },
-    include: {
-      cohort: true,
-    },
+  const membership = await db.cohortMembers.findUnique({
+    user_id: session.user.id,
+    cohort_id: cohortId,
   });
 
   if (!membership) {
@@ -87,39 +81,30 @@ export async function GET(request: NextRequest) {
   }
 
   // Get all members
-  const members = await prisma.cohortMember.findMany({
-    where: { cohortId },
-    include: { user: true },
-  });
+  const members = await db.cohortMembers.findByCohort(cohortId);
 
   const today = getIndiaDateKey();
   const last7Days = getLastNDays(7);
   const last30Days = getLastNDays(30);
 
   // Get all submissions for the last 30 days
-  const submissions = await prisma.submission.findMany({
-    where: {
-      cohortId,
-      dateKey: { in: last30Days },
-    },
-  });
+  const allSubmissions = await db.submissions.findMany({ cohort_id: cohortId });
+  const submissions = allSubmissions.filter(s => last30Days.includes(s.date_key));
 
   // Build submission maps
   const submissionsByDate = new Map<string, Set<string>>();
   const submissionsByUser = new Map<string, string[]>();
 
   for (const sub of submissions) {
-    // By date
-    if (!submissionsByDate.has(sub.dateKey)) {
-      submissionsByDate.set(sub.dateKey, new Set());
+    if (!submissionsByDate.has(sub.date_key)) {
+      submissionsByDate.set(sub.date_key, new Set());
     }
-    submissionsByDate.get(sub.dateKey)!.add(sub.userId);
+    submissionsByDate.get(sub.date_key)!.add(sub.user_id);
 
-    // By user
-    if (!submissionsByUser.has(sub.userId)) {
-      submissionsByUser.set(sub.userId, []);
+    if (!submissionsByUser.has(sub.user_id)) {
+      submissionsByUser.set(sub.user_id, []);
     }
-    submissionsByUser.get(sub.userId)!.push(sub.dateKey);
+    submissionsByUser.get(sub.user_id)!.push(sub.date_key);
   }
 
   // Calculate daily stats for last 7 days
@@ -137,15 +122,13 @@ export async function GET(request: NextRequest) {
 
   // Calculate member health
   const memberHealth: MemberHealth[] = members.map((member) => {
-    const userSubs = submissionsByUser.get(member.userId) || [];
+    const userSubs = submissionsByUser.get(member.user_id) || [];
     const last7 = userSubs.filter((d) => last7Days.includes(d)).length;
     const last30 = userSubs.length;
 
-    // Find last submission date
     const sortedDates = [...userSubs].sort().reverse();
     const lastSubmissionDate = sortedDates[0] || null;
 
-    // Calculate days since last submission
     let daysSinceLastSubmission = 999;
     if (lastSubmissionDate) {
       const lastDate = new Date(lastSubmissionDate);
@@ -155,7 +138,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Determine status
     let status: "active" | "at_risk" | "inactive";
     if (daysSinceLastSubmission <= 2) {
       status = "active";
@@ -165,7 +147,6 @@ export async function GET(request: NextRequest) {
       status = "inactive";
     }
 
-    // Calculate current streak (simplified)
     let streak = 0;
     const sortedAsc = [...userSubs].sort().reverse();
     for (const dateKey of sortedAsc) {
@@ -177,9 +158,9 @@ export async function GET(request: NextRequest) {
     }
 
     return {
-      userId: member.userId,
-      userName: member.user.name,
-      userEmail: member.user.email,
+      userId: member.user_id,
+      userName: member.user?.name || null,
+      userEmail: member.user?.email || "",
       currentStreak: streak,
       submissionsLast7Days: last7,
       submissionsLast30Days: last30,
@@ -188,22 +169,14 @@ export async function GET(request: NextRequest) {
     };
   });
 
-  // Sort by status (inactive first for attention)
   memberHealth.sort((a, b) => {
     const statusOrder = { inactive: 0, at_risk: 1, active: 2 };
     return statusOrder[a.status] - statusOrder[b.status];
   });
 
-  // Calculate summary metrics
-  const activeMembers = memberHealth.filter(
-    (m) => m.status === "active",
-  ).length;
-  const atRiskMembers = memberHealth.filter(
-    (m) => m.status === "at_risk",
-  ).length;
-  const inactiveMembers = memberHealth.filter(
-    (m) => m.status === "inactive",
-  ).length;
+  const activeMembers = memberHealth.filter((m) => m.status === "active").length;
+  const atRiskMembers = memberHealth.filter((m) => m.status === "at_risk").length;
+  const inactiveMembers = memberHealth.filter((m) => m.status === "inactive").length;
 
   const todayStats = dailyStats.find((d) => d.dateKey === today);
   const todaySubmissionRate = todayStats?.submissionRate || 0;
@@ -216,43 +189,28 @@ export async function GET(request: NextRequest) {
         )
       : 0;
 
-  // Calculate retention metrics (D1, D3, D7)
-  // For each member, check if they submitted on their first day and then on day 2, 4, 8
+  // Calculate retention metrics
   const retention: RetentionMetrics = { d1: 0, d3: 0, d7: 0 };
 
-  // Get all submissions for all time to calculate retention
-  const allSubmissions = await prisma.submission.findMany({
-    where: { cohortId },
-    select: { userId: true, dateKey: true },
-  });
-
-  // Group by user
   const allUserSubmissions = new Map<string, Set<string>>();
   for (const sub of allSubmissions) {
-    if (!allUserSubmissions.has(sub.userId)) {
-      allUserSubmissions.set(sub.userId, new Set());
+    if (!allUserSubmissions.has(sub.user_id)) {
+      allUserSubmissions.set(sub.user_id, new Set());
     }
-    allUserSubmissions.get(sub.userId)!.add(sub.dateKey);
+    allUserSubmissions.get(sub.user_id)!.add(sub.date_key);
   }
 
-  // Calculate retention for each member based on their join date
-  let d1Retained = 0,
-    d1Eligible = 0;
-  let d3Retained = 0,
-    d3Eligible = 0;
-  let d7Retained = 0,
-    d7Eligible = 0;
+  let d1Retained = 0, d1Eligible = 0;
+  let d3Retained = 0, d3Eligible = 0;
+  let d7Retained = 0, d7Eligible = 0;
 
   for (const member of members) {
-    const userSubs = allUserSubmissions.get(member.userId) || new Set();
-
-    // Get the first submission date as "day 0"
+    const userSubs = allUserSubmissions.get(member.user_id) || new Set();
     const sortedDates = [...userSubs].sort();
     if (sortedDates.length === 0) continue;
 
     const firstSubmitDate = new Date(sortedDates[0]);
 
-    // D1: submitted on day 0 and day 1
     const day1 = new Date(firstSubmitDate);
     day1.setDate(day1.getDate() + 1);
     const day1Key = getIndiaDateKey(day1);
@@ -261,7 +219,6 @@ export async function GET(request: NextRequest) {
       if (userSubs.has(day1Key)) d1Retained++;
     }
 
-    // D3: submitted on day 0 and day 3
     const day3 = new Date(firstSubmitDate);
     day3.setDate(day3.getDate() + 3);
     const day3Key = getIndiaDateKey(day3);
@@ -270,7 +227,6 @@ export async function GET(request: NextRequest) {
       if (userSubs.has(day3Key)) d3Retained++;
     }
 
-    // D7: submitted on day 0 and day 7
     const day7 = new Date(firstSubmitDate);
     day7.setDate(day7.getDate() + 7);
     const day7Key = getIndiaDateKey(day7);
@@ -280,12 +236,9 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  retention.d1 =
-    d1Eligible > 0 ? Math.round((d1Retained / d1Eligible) * 100) : 0;
-  retention.d3 =
-    d3Eligible > 0 ? Math.round((d3Retained / d3Eligible) * 100) : 0;
-  retention.d7 =
-    d7Eligible > 0 ? Math.round((d7Retained / d7Eligible) * 100) : 0;
+  retention.d1 = d1Eligible > 0 ? Math.round((d1Retained / d1Eligible) * 100) : 0;
+  retention.d3 = d3Eligible > 0 ? Math.round((d3Retained / d3Eligible) * 100) : 0;
+  retention.d7 = d7Eligible > 0 ? Math.round((d7Retained / d7Eligible) * 100) : 0;
 
   const healthData: CohortHealthData = {
     cohortId,

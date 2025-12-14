@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { supabaseAdmin } from "@/lib/supabase";
+import { db } from "@/lib/db";
 import {
   sendEmail,
   generateReminderEmail,
@@ -16,7 +17,6 @@ import {
 function verifyCronSecret(request: NextRequest): boolean {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) {
-    // Allow in development without secret
     return process.env.NODE_ENV === "development";
   }
 
@@ -43,12 +43,10 @@ interface ReminderCandidate {
 }
 
 export async function POST(request: NextRequest) {
-  // Verify authorization
   if (!verifyCronSecret(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Check if email is configured
   if (!isEmailConfigured()) {
     return NextResponse.json({
       success: true,
@@ -60,7 +58,6 @@ export async function POST(request: NextRequest) {
   const dateKey = getTodayDateKeyIST();
   const minutesLeft = getMinutesUntilDeadline();
 
-  // If past deadline, no reminders needed
   if (minutesLeft <= 0) {
     return NextResponse.json({
       success: true,
@@ -70,70 +67,66 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Find all users in ACTIVE or TRIAL cohorts who haven't submitted today
-    // Join with notification preferences
-    const candidates = await prisma.$queryRaw<ReminderCandidate[]>`
-      SELECT
-        u.id as userId,
-        u.email,
-        u.name as userName,
-        c.id as cohortId,
-        c.name as cohortName,
-        COALESCE(np.isEnabled, 1) as "prefs.isEnabled",
-        COALESCE(np.remindTimeMinutesBeforeCutoff, 90) as "prefs.remindTimeMinutesBeforeCutoff",
-        COALESCE(np.lastCallMinutesBeforeCutoff, 15) as "prefs.lastCallMinutesBeforeCutoff",
-        np.quietHoursStart as "prefs.quietHoursStart",
-        np.quietHoursEnd as "prefs.quietHoursEnd"
-      FROM User u
-      INNER JOIN CohortMember cm ON cm.userId = u.id
-      INNER JOIN Cohort c ON c.id = cm.cohortId
-      LEFT JOIN NotificationPrefs np ON np.userId = u.id
-      WHERE c.status IN ('ACTIVE', 'TRIAL')
-        AND NOT EXISTS (
-          SELECT 1 FROM Submission s
-          WHERE s.userId = u.id
-            AND s.cohortId = c.id
-            AND s.dateKey = ${dateKey}
-        )
-    `;
+    // Get active cohorts
+    const { data: cohorts } = await supabaseAdmin
+      .from("cohorts")
+      .select("id, name")
+      .in("status", ["ACTIVE", "TRIAL"]);
 
-    // Transform raw results to proper structure
-    const processedCandidates: ReminderCandidate[] = candidates.map((row) => {
-      const rawRow = row as unknown as Record<string, unknown>;
-      return {
-        userId: rawRow.userId as string,
-        email: rawRow.email as string,
-        userName: rawRow.userName as string | null,
-        cohortId: rawRow.cohortId as string,
-        cohortName: rawRow.cohortName as string,
-        prefs: {
-          isEnabled: Boolean(rawRow["prefs.isEnabled"]),
-          remindTimeMinutesBeforeCutoff:
-            Number(rawRow["prefs.remindTimeMinutesBeforeCutoff"]) || 90,
-          lastCallMinutesBeforeCutoff:
-            Number(rawRow["prefs.lastCallMinutesBeforeCutoff"]) || 15,
-          quietHoursStart: rawRow["prefs.quietHoursStart"] as number | null,
-          quietHoursEnd: rawRow["prefs.quietHoursEnd"] as number | null,
-        },
-      };
-    });
+    if (!cohorts || cohorts.length === 0) {
+      return NextResponse.json({
+        success: true,
+        message: "No active cohorts",
+        sent: 0,
+      });
+    }
+
+    const candidates: ReminderCandidate[] = [];
+
+    // For each cohort, find members who haven't submitted today
+    for (const cohort of cohorts) {
+      const members = await db.cohortMembers.findByCohort(cohort.id);
+
+      for (const member of members) {
+        // Check if already submitted today
+        const submission = await db.submissions.findUnique({
+          user_id: member.user_id,
+          cohort_id: cohort.id,
+          date_key: dateKey,
+        });
+
+        if (submission) continue;
+
+        // Get notification prefs
+        const prefs = await db.notificationPrefs.findByUser(member.user_id);
+
+        candidates.push({
+          userId: member.user_id,
+          email: member.user?.email || "",
+          userName: member.user?.name || null,
+          cohortId: cohort.id,
+          cohortName: cohort.name,
+          prefs: {
+            isEnabled: prefs?.is_enabled ?? true,
+            remindTimeMinutesBeforeCutoff: prefs?.remind_time_minutes_before_cutoff ?? 90,
+            lastCallMinutesBeforeCutoff: prefs?.last_call_minutes_before_cutoff ?? 15,
+            quietHoursStart: prefs?.quiet_hours_start ?? null,
+            quietHoursEnd: prefs?.quiet_hours_end ?? null,
+          },
+        });
+      }
+    }
 
     // Get existing reminder logs for today
-    const existingLogs = await prisma.reminderLog.findMany({
-      where: { dateKey },
-      select: {
-        userId: true,
-        cohortId: true,
-        type: true,
-      },
-    });
+    const { data: existingLogs } = await supabaseAdmin
+      .from("reminder_logs")
+      .select("user_id, cohort_id, type")
+      .eq("date_key", dateKey);
 
-    // Build a set for quick lookup
     const sentSet = new Set(
-      existingLogs.map((log) => `${log.userId}:${log.cohortId}:${log.type}`),
+      (existingLogs || []).map((log) => `${log.user_id}:${log.cohort_id}:${log.type}`),
     );
 
-    // Process each candidate
     const results: {
       userId: string;
       cohortId: string;
@@ -141,7 +134,9 @@ export async function POST(request: NextRequest) {
       success: boolean;
     }[] = [];
 
-    for (const candidate of processedCandidates) {
+    for (const candidate of candidates) {
+      if (!candidate.email) continue;
+
       const alreadySentRemind = sentSet.has(
         `${candidate.userId}:${candidate.cohortId}:REMIND`,
       );
@@ -150,7 +145,7 @@ export async function POST(request: NextRequest) {
       );
 
       const reminderType = shouldSendReminder({
-        hasSubmittedToday: false, // We already filtered these out
+        hasSubmittedToday: false,
         prefsEnabled: candidate.prefs.isEnabled,
         remindTimeMinutes: candidate.prefs.remindTimeMinutesBeforeCutoff,
         lastCallMinutes: candidate.prefs.lastCallMinutesBeforeCutoff,
@@ -160,11 +155,8 @@ export async function POST(request: NextRequest) {
         alreadySentLastCall,
       });
 
-      if (!reminderType) {
-        continue;
-      }
+      if (!reminderType) continue;
 
-      // Generate and send email
       const emailContent = generateReminderEmail({
         userName: candidate.userName || "there",
         cohortName: candidate.cohortName,
@@ -180,23 +172,12 @@ export async function POST(request: NextRequest) {
       });
 
       if (emailResult.success) {
-        // Log the reminder (idempotency key)
-        try {
-          await prisma.reminderLog.create({
-            data: {
-              userId: candidate.userId,
-              cohortId: candidate.cohortId,
-              dateKey,
-              type: reminderType,
-            },
-          });
-        } catch {
-          // Unique constraint violation means it was already sent
-          // This is fine, skip
-          console.log(
-            `Reminder already logged for ${candidate.userId}:${candidate.cohortId}:${reminderType}`,
-          );
-        }
+        await supabaseAdmin.from("reminder_logs").insert({
+          user_id: candidate.userId,
+          cohort_id: candidate.cohortId,
+          date_key: dateKey,
+          type: reminderType,
+        });
       }
 
       results.push({
@@ -213,7 +194,7 @@ export async function POST(request: NextRequest) {
       success: true,
       dateKey,
       minutesUntilDeadline: minutesLeft,
-      candidatesFound: processedCandidates.length,
+      candidatesFound: candidates.length,
       sent: sentCount,
       results,
     });
@@ -226,11 +207,9 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Also allow GET for easy testing in development
 export async function GET(request: NextRequest) {
   if (process.env.NODE_ENV !== "development") {
     return NextResponse.json({ error: "Method not allowed" }, { status: 405 });
   }
-
   return POST(request);
 }

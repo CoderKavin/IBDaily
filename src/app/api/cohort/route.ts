@@ -1,11 +1,10 @@
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
+import { supabaseAdmin } from "@/lib/supabase";
 import {
   withAuthGet,
   withAuth,
   success,
   errors,
-  requireParam,
-  throwError,
 } from "@/lib/api-utils";
 import {
   computeCohortStatus,
@@ -26,49 +25,47 @@ function generateJoinCode(): string {
  * Compute cohort status info including paid member count
  */
 async function getCohortStatusInfo(cohortId: string) {
-  const cohort = await prisma.cohort.findUnique({
-    where: { id: cohortId },
-    include: {
-      members: {
-        include: {
-          user: {
-            include: { subscription: true },
-          },
-        },
-      },
-    },
-  });
+  const { data: cohort } = await supabaseAdmin
+    .from("cohorts")
+    .select("*")
+    .eq("id", cohortId)
+    .single();
 
   if (!cohort) return null;
+
+  const members = await db.cohortMembers.findByCohort(cohortId);
 
   const now = new Date();
 
   // Count active subscriptions
-  const paidCount = cohort.members.filter((m) => {
-    const sub = m.user.subscription;
-    return sub && sub.status === "active" && sub.currentPeriodEnd > now;
-  }).length;
+  let paidCount = 0;
+  for (const member of members) {
+    const sub = await db.subscriptions.findByUser(member.user_id);
+    if (sub && sub.status === "active" && new Date(sub.current_period_end) > now) {
+      paidCount++;
+    }
+  }
 
   const statusInfo = computeCohortStatus({
     currentStatus: cohort.status as CohortStatus,
-    trialEndsAt: cohort.trialEndsAt,
-    activatedAt: cohort.activatedAt,
+    trialEndsAt: new Date(cohort.trial_ends_at),
+    activatedAt: cohort.activated_at ? new Date(cohort.activated_at) : null,
     paidCount,
-    memberCount: cohort.members.length,
+    memberCount: members.length,
   });
 
   // Update cohort status in DB if it changed
   if (statusInfo.status !== cohort.status) {
-    await prisma.cohort.update({
-      where: { id: cohortId },
-      data: {
+    await supabaseAdmin
+      .from("cohorts")
+      .update({
         status: statusInfo.status,
-        activatedAt:
-          statusInfo.status === "ACTIVE" && !cohort.activatedAt
-            ? new Date()
-            : cohort.activatedAt,
-      },
-    });
+        activated_at:
+          statusInfo.status === "ACTIVE" && !cohort.activated_at
+            ? new Date().toISOString()
+            : cohort.activated_at,
+      })
+      .eq("id", cohortId);
   }
 
   return {
@@ -85,10 +82,9 @@ export const GET = withAuthGet(async ({ session, searchParams }) => {
   // If requesting status for a specific cohort
   if (statusCohortId) {
     // Verify membership
-    const membership = await prisma.cohortMember.findUnique({
-      where: {
-        userId_cohortId: { userId: session.user.id, cohortId: statusCohortId },
-      },
+    const membership = await db.cohortMembers.findUnique({
+      user_id: session.user.id,
+      cohort_id: statusCohortId,
     });
 
     if (!membership) {
@@ -99,50 +95,43 @@ export const GET = withAuthGet(async ({ session, searchParams }) => {
     return success({ statusInfo });
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { activeCohortId: true },
-  });
+  const user = await db.users.findUnique({ id: session.user.id });
+  const memberships = await db.cohortMembers.findByUser(session.user.id);
 
-  const memberships = await prisma.cohortMember.findMany({
-    where: { userId: session.user.id },
-    include: {
-      cohort: {
-        include: {
-          _count: { select: { members: true } },
-        },
-      },
-    },
-  });
-
-  const cohorts = memberships.map((m) => ({
-    id: m.cohort.id,
-    name: m.cohort.name,
-    joinCode: m.cohort.joinCode,
-    memberCount: m.cohort._count.members,
-    joinedAt: m.joinedAt,
-    isActive: m.cohort.id === user?.activeCohortId,
-    role: m.role,
-    status: m.cohort.status,
-    trialEndsAt: m.cohort.trialEndsAt,
-  }));
+  // Get member counts for each cohort
+  const cohorts = await Promise.all(
+    memberships.map(async (m) => {
+      const allMembers = await db.cohortMembers.findByCohort(m.cohort_id);
+      return {
+        id: m.cohort.id,
+        name: m.cohort.name,
+        joinCode: m.cohort.join_code,
+        memberCount: allMembers.length,
+        joinedAt: m.joined_at,
+        isActive: m.cohort.id === user?.active_cohort_id,
+        role: m.role,
+        status: m.cohort.status,
+        trialEndsAt: m.cohort.trial_ends_at,
+      };
+    })
+  );
 
   // Get active cohort details with status info
   let activeCohort = null;
   let activeCohortStatus = null;
 
-  if (user?.activeCohortId) {
-    const active = cohorts.find((c) => c.id === user.activeCohortId);
+  if (user?.active_cohort_id) {
+    const active = cohorts.find((c) => c.id === user.active_cohort_id);
     if (active) {
       activeCohort = active;
-      activeCohortStatus = await getCohortStatusInfo(user.activeCohortId);
+      activeCohortStatus = await getCohortStatusInfo(user.active_cohort_id);
     }
   }
 
   return success({
     cohorts,
     activeCohort,
-    activeCohortId: user?.activeCohortId,
+    activeCohortId: user?.active_cohort_id,
     activeCohortStatus,
   });
 });
@@ -163,21 +152,16 @@ export const POST = withAuth<{
     }
 
     // Verify user is a member
-    const membership = await prisma.cohortMember.findUnique({
-      where: {
-        userId_cohortId: { userId: session.user.id, cohortId },
-      },
-      include: { cohort: true },
+    const membership = await db.cohortMembers.findUnique({
+      user_id: session.user.id,
+      cohort_id: cohortId,
     });
 
     if (!membership) {
       return errors.notMember();
     }
 
-    await prisma.user.update({
-      where: { id: session.user.id },
-      data: { activeCohortId: cohortId },
-    });
+    await db.users.update(session.user.id, { active_cohort_id: cohortId });
 
     const statusInfo = await getCohortStatusInfo(cohortId);
 
@@ -185,7 +169,7 @@ export const POST = withAuth<{
       activeCohort: {
         id: membership.cohort.id,
         name: membership.cohort.name,
-        joinCode: membership.cohort.joinCode,
+        joinCode: membership.cohort.join_code,
       },
       statusInfo,
     });
@@ -201,9 +185,7 @@ export const POST = withAuth<{
     let code = generateJoinCode();
     let attempts = 0;
     while (attempts < 10) {
-      const existing = await prisma.cohort.findUnique({
-        where: { joinCode: code },
-      });
+      const existing = await db.cohorts.findUnique({ join_code: code });
       if (!existing) break;
       code = generateJoinCode();
       attempts++;
@@ -212,39 +194,31 @@ export const POST = withAuth<{
     // Calculate trial end date
     const trialEndsAt = computeTrialEndDate(new Date());
 
-    // Create cohort and set as active
-    const cohort = await prisma.$transaction(async (tx) => {
-      const newCohort = await tx.cohort.create({
-        data: {
-          name,
-          joinCode: code,
-          status: "TRIAL",
-          trialEndsAt,
-          members: {
-            create: {
-              userId: session.user.id,
-              role: "OWNER",
-            },
-          },
-        },
-      });
-
-      // Set as active cohort
-      await tx.user.update({
-        where: { id: session.user.id },
-        data: { activeCohortId: newCohort.id },
-      });
-
-      return newCohort;
+    // Create cohort
+    const cohort = await db.cohorts.create({
+      name,
+      join_code: code,
+      status: "TRIAL",
+      trial_ends_at: trialEndsAt.toISOString(),
     });
+
+    // Add user as owner
+    await db.cohortMembers.create({
+      user_id: session.user.id,
+      cohort_id: cohort.id,
+      role: "OWNER",
+    });
+
+    // Set as active cohort
+    await db.users.update(session.user.id, { active_cohort_id: cohort.id });
 
     return success({
       id: cohort.id,
       name: cohort.name,
-      joinCode: cohort.joinCode,
+      joinCode: cohort.join_code,
       isActive: true,
       status: cohort.status,
-      trialEndsAt: cohort.trialEndsAt,
+      trialEndsAt: cohort.trial_ends_at,
     });
   }
 
@@ -254,9 +228,7 @@ export const POST = withAuth<{
       return errors.missingParam("joinCode");
     }
 
-    const cohort = await prisma.cohort.findUnique({
-      where: { joinCode: joinCode.toUpperCase() },
-    });
+    const cohort = await db.cohorts.findUnique({ join_code: joinCode.toUpperCase() });
 
     if (!cohort) {
       return errors.validation(
@@ -265,56 +237,43 @@ export const POST = withAuth<{
     }
 
     // Check if already a member
-    const existingMember = await prisma.cohortMember.findUnique({
-      where: {
-        userId_cohortId: {
-          userId: session.user.id,
-          cohortId: cohort.id,
-        },
-      },
+    const existingMember = await db.cohortMembers.findUnique({
+      user_id: session.user.id,
+      cohort_id: cohort.id,
     });
 
     if (existingMember) {
       // Already a member, just set as active
-      await prisma.user.update({
-        where: { id: session.user.id },
-        data: { activeCohortId: cohort.id },
-      });
+      await db.users.update(session.user.id, { active_cohort_id: cohort.id });
 
       return success({
         id: cohort.id,
         name: cohort.name,
-        joinCode: cohort.joinCode,
+        joinCode: cohort.join_code,
         isActive: true,
         alreadyMember: true,
         status: cohort.status,
-        trialEndsAt: cohort.trialEndsAt,
+        trialEndsAt: cohort.trial_ends_at,
       });
     }
 
-    // Join and set as active
-    await prisma.$transaction(async (tx) => {
-      await tx.cohortMember.create({
-        data: {
-          userId: session.user.id,
-          cohortId: cohort.id,
-          role: "MEMBER",
-        },
-      });
-
-      await tx.user.update({
-        where: { id: session.user.id },
-        data: { activeCohortId: cohort.id },
-      });
+    // Join cohort
+    await db.cohortMembers.create({
+      user_id: session.user.id,
+      cohort_id: cohort.id,
+      role: "MEMBER",
     });
+
+    // Set as active
+    await db.users.update(session.user.id, { active_cohort_id: cohort.id });
 
     return success({
       id: cohort.id,
       name: cohort.name,
-      joinCode: cohort.joinCode,
+      joinCode: cohort.join_code,
       isActive: true,
       status: cohort.status,
-      trialEndsAt: cohort.trialEndsAt,
+      trialEndsAt: cohort.trial_ends_at,
     });
   }
 

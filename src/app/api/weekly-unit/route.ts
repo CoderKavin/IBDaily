@@ -1,10 +1,10 @@
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
+import { supabaseAdmin } from "@/lib/supabase";
 import {
   withAuthGet,
   withAuth,
   success,
   errors,
-  requireParam,
 } from "@/lib/api-utils";
 import { getWeekStartDateKey } from "@/lib/timezone";
 
@@ -32,32 +32,25 @@ export const GET = withAuthGet(async ({ session, searchParams }) => {
 
   if (subjectId) {
     // Get selection for specific subject
-    const selection = await prisma.weeklyUnitSelection.findUnique({
-      where: {
-        userId_subjectId_weekStartDateKey: {
-          userId: session.user.id,
-          subjectId,
-          weekStartDateKey: currentWeekStart,
-        },
-      },
-      include: { unit: true, subject: true },
-    });
+    const { data: selection } = await supabaseAdmin
+      .from("weekly_unit_selections")
+      .select("*, unit:units(*), subject:subjects(*)")
+      .eq("user_id", session.user.id)
+      .eq("subject_id", subjectId)
+      .eq("week_start_date_key", currentWeekStart)
+      .single();
 
     // Carry-forward: if no selection this week, check last week
     if (!selection) {
-      const lastWeekSelection = await prisma.weeklyUnitSelection.findUnique({
-        where: {
-          userId_subjectId_weekStartDateKey: {
-            userId: session.user.id,
-            subjectId,
-            weekStartDateKey: previousWeekStart,
-          },
-        },
-        include: { unit: true, subject: true },
-      });
+      const { data: lastWeekSelection } = await supabaseAdmin
+        .from("weekly_unit_selections")
+        .select("*, unit:units(*), subject:subjects(*)")
+        .eq("user_id", session.user.id)
+        .eq("subject_id", subjectId)
+        .eq("week_start_date_key", previousWeekStart)
+        .single();
 
       if (lastWeekSelection) {
-        // Return last week's selection as suggestion (not yet committed)
         return success({
           selection: null,
           suggestedUnit: {
@@ -79,44 +72,44 @@ export const GET = withAuthGet(async ({ session, searchParams }) => {
   }
 
   // Get all selections for current week
-  const selections = await prisma.weeklyUnitSelection.findMany({
-    where: {
-      userId: session.user.id,
-      weekStartDateKey: currentWeekStart,
-    },
-    include: { unit: true, subject: true },
-  });
+  const selections = await db.weeklyUnitSelections.findByUserAndWeek(
+    session.user.id,
+    currentWeekStart
+  );
 
   // Get user's subjects to check which need carry-forward
-  const userSubjects = await prisma.userSubject.findMany({
-    where: { userId: session.user.id },
-    include: { subject: true },
-  });
+  const userSubjects = await db.userSubjects.findByUser(session.user.id);
 
   // For subjects without current week selection, check last week
-  const subjectsWithSelection = new Set(selections.map((s) => s.subjectId));
+  const subjectsWithSelection = new Set(selections.map((s) => s.subject_id));
   const subjectsNeedingSelection = userSubjects.filter(
-    (us) => us.subject.hasUnits && !subjectsWithSelection.has(us.subjectId),
+    (us) => us.subject.has_units && !subjectsWithSelection.has(us.subject_id),
   );
 
   // Get last week's selections for subjects needing carry-forward
-  const lastWeekSelections = await prisma.weeklyUnitSelection.findMany({
-    where: {
-      userId: session.user.id,
-      weekStartDateKey: previousWeekStart,
-      subjectId: { in: subjectsNeedingSelection.map((s) => s.subjectId) },
-    },
-    include: { unit: true, subject: true },
-  });
+  const lastWeekSelections = await Promise.all(
+    subjectsNeedingSelection.map(async (s) => {
+      const { data } = await supabaseAdmin
+        .from("weekly_unit_selections")
+        .select("*, unit:units(*), subject:subjects(*)")
+        .eq("user_id", session.user.id)
+        .eq("subject_id", s.subject_id)
+        .eq("week_start_date_key", previousWeekStart)
+        .single();
+      return data;
+    })
+  );
 
   // Build suggested units map
-  const suggestedUnits = lastWeekSelections.map((lws) => ({
-    subjectId: lws.subjectId,
-    subjectName: lws.subject.transcriptName,
-    unitId: lws.unit.id,
-    unitName: lws.unit.name,
-    fromLastWeek: true,
-  }));
+  const suggestedUnits = lastWeekSelections
+    .filter(Boolean)
+    .map((lws) => ({
+      subjectId: lws!.subject_id,
+      subjectName: lws!.subject.transcript_name,
+      unitId: lws!.unit.id,
+      unitName: lws!.unit.name,
+      fromLastWeek: true,
+    }));
 
   return success({
     selections,
@@ -137,26 +130,21 @@ export const POST = withAuth<{
   }
 
   // Verify user has this subject
-  const userSubject = await prisma.userSubject.findUnique({
-    where: {
-      userId_subjectId: { userId: session.user.id, subjectId },
-    },
-  });
+  const userSubjects = await db.userSubjects.findByUser(session.user.id);
+  const userSubject = userSubjects.find((us) => us.subject_id === subjectId);
 
   if (!userSubject) {
     return errors.validation("You don't have this subject");
   }
 
   // Verify unit exists and belongs to subject
-  const unit = await prisma.unit.findFirst({
-    where: {
-      id: unitId,
-      subjectId,
-      OR: [
-        { levelScope: "BOTH" },
-        { levelScope: userSubject.level === "HL" ? "HL_ONLY" : "SL_ONLY" },
-      ],
-    },
+  const allUnits = await db.units.findBySubject(subjectId);
+  const unit = allUnits.find((u) => {
+    if (u.id !== unitId) return false;
+    if (u.level_scope === "BOTH") return true;
+    if (u.level_scope === "HL_ONLY" && userSubject.level === "HL") return true;
+    if (u.level_scope === "SL_ONLY" && userSubject.level === "SL") return true;
+    return false;
   });
 
   if (!unit) {
@@ -166,32 +154,26 @@ export const POST = withAuth<{
   const currentWeekStart = getWeekStartDateKey();
 
   // Check if already set this week - ENFORCE ONCE PER WEEK
-  const existing = await prisma.weeklyUnitSelection.findUnique({
-    where: {
-      userId_subjectId_weekStartDateKey: {
-        userId: session.user.id,
-        subjectId,
-        weekStartDateKey: currentWeekStart,
-      },
-    },
-    include: { unit: true },
-  });
+  const { data: existing } = await supabaseAdmin
+    .from("weekly_unit_selections")
+    .select("*, unit:units(*)")
+    .eq("user_id", session.user.id)
+    .eq("subject_id", subjectId)
+    .eq("week_start_date_key", currentWeekStart)
+    .single();
 
   if (existing) {
-    // Already set this week - do not allow change
     return errors.validation(
       `You already selected "${existing.unit.name}" for this week. You can change it next week.`,
     );
   }
 
   // Create new selection
-  await prisma.weeklyUnitSelection.create({
-    data: {
-      userId: session.user.id,
-      subjectId,
-      unitId,
-      weekStartDateKey: currentWeekStart,
-    },
+  await supabaseAdmin.from("weekly_unit_selections").insert({
+    user_id: session.user.id,
+    subject_id: subjectId,
+    unit_id: unitId,
+    week_start_date_key: currentWeekStart,
   });
 
   return success({

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import Stripe from "stripe";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
+import { supabaseAdmin } from "@/lib/supabase";
 import { constructWebhookEvent, getStripeConfig } from "@/lib/stripe";
 import { ACTIVATION_THRESHOLD } from "@/lib/cohort-status";
 
@@ -14,13 +15,10 @@ export const dynamic = "force-dynamic";
  */
 async function updateCohortStatuses(userId: string) {
   // Get all cohorts the user is a member of
-  const memberships = await prisma.cohortMember.findMany({
-    where: { userId },
-    select: { cohortId: true },
-  });
+  const memberships = await db.cohortMembers.findByUser(userId);
 
-  for (const { cohortId } of memberships) {
-    await recomputeCohortStatus(cohortId);
+  for (const membership of memberships) {
+    await recomputeCohortStatus(membership.cohort_id);
   }
 }
 
@@ -28,48 +26,42 @@ async function updateCohortStatuses(userId: string) {
  * Recompute a cohort's status based on current paid member count
  */
 async function recomputeCohortStatus(cohortId: string) {
-  // Get cohort with members and their subscriptions
-  const cohort = await prisma.cohort.findUnique({
-    where: { id: cohortId },
-    include: {
-      members: {
-        include: {
-          user: {
-            include: { subscription: true },
-          },
-        },
-      },
-    },
-  });
+  // Get cohort
+  const { data: cohort } = await supabaseAdmin
+    .from("cohorts")
+    .select("*")
+    .eq("id", cohortId)
+    .single();
 
   if (!cohort) return;
 
+  // Get members
+  const members = await db.cohortMembers.findByCohort(cohortId);
+
   // Count active subscriptions
   const now = new Date();
-  const paidCount = cohort.members.filter((m) => {
-    const sub = m.user.subscription;
-    return sub && sub.status === "active" && sub.currentPeriodEnd > now;
-  }).length;
+  let paidCount = 0;
+  for (const member of members) {
+    const sub = await db.subscriptions.findByUser(member.user_id);
+    if (sub && sub.status === "active" && new Date(sub.current_period_end) > now) {
+      paidCount++;
+    }
+  }
 
   // Determine if cohort should be activated
   const shouldActivate = paidCount >= ACTIVATION_THRESHOLD;
 
   // Update cohort status if needed
   if (shouldActivate && cohort.status !== "ACTIVE") {
-    await prisma.cohort.update({
-      where: { id: cohortId },
-      data: {
+    await supabaseAdmin
+      .from("cohorts")
+      .update({
         status: "ACTIVE",
-        activatedAt: new Date(),
-      },
-    });
+        activated_at: new Date().toISOString(),
+      })
+      .eq("id", cohortId);
     console.log(`Cohort ${cohortId} activated with ${paidCount} paid members`);
-  } else if (!shouldActivate && cohort.status === "LOCKED") {
-    // Check if we have enough paid members to unlock
-    // (cohort was locked but now has >= 6 paid)
-    // This case is already handled by shouldActivate above
   }
-  // Note: We don't automatically lock cohorts here - that happens on status check
 }
 
 /**
@@ -88,29 +80,38 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
       ? subscription.customer
       : subscription.customer.id;
 
-  // Get current period end - handle both snake_case and camelCase from different API versions
+  // Get current period end
   const subAny = subscription as unknown as Record<string, unknown>;
   const periodEndTimestamp =
     (subAny.current_period_end as number) ||
     (subAny.currentPeriodEnd as number) ||
-    Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60; // fallback: 30 days
+    Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60;
 
   // Upsert subscription record
-  await prisma.subscription.upsert({
-    where: { stripeSubscriptionId: subscription.id },
-    update: {
+  const { data: existing } = await supabaseAdmin
+    .from("subscriptions")
+    .select("*")
+    .eq("stripe_subscription_id", subscription.id)
+    .single();
+
+  if (existing) {
+    await supabaseAdmin
+      .from("subscriptions")
+      .update({
+        status: subscription.status,
+        current_period_end: new Date(periodEndTimestamp * 1000).toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("stripe_subscription_id", subscription.id);
+  } else {
+    await supabaseAdmin.from("subscriptions").insert({
+      user_id: userId,
+      stripe_customer_id: customerId,
+      stripe_subscription_id: subscription.id,
       status: subscription.status,
-      currentPeriodEnd: new Date(periodEndTimestamp * 1000),
-      updatedAt: new Date(),
-    },
-    create: {
-      userId,
-      stripeCustomerId: customerId,
-      stripeSubscriptionId: subscription.id,
-      status: subscription.status,
-      currentPeriodEnd: new Date(periodEndTimestamp * 1000),
-    },
-  });
+      current_period_end: new Date(periodEndTimestamp * 1000).toISOString(),
+    });
+  }
 
   console.log(
     `Subscription ${subscription.id} updated: ${subscription.status}`,
@@ -125,23 +126,25 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
  */
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   // Update subscription status to canceled
-  await prisma.subscription.update({
-    where: { stripeSubscriptionId: subscription.id },
-    data: {
+  await supabaseAdmin
+    .from("subscriptions")
+    .update({
       status: "canceled",
-      updatedAt: new Date(),
-    },
-  });
+      updated_at: new Date().toISOString(),
+    })
+    .eq("stripe_subscription_id", subscription.id);
 
   console.log(`Subscription ${subscription.id} deleted/canceled`);
 
   // Get userId from subscription record
-  const subRecord = await prisma.subscription.findUnique({
-    where: { stripeSubscriptionId: subscription.id },
-  });
+  const { data: subRecord } = await supabaseAdmin
+    .from("subscriptions")
+    .select("*")
+    .eq("stripe_subscription_id", subscription.id)
+    .single();
 
   if (subRecord) {
-    await updateCohortStatuses(subRecord.userId);
+    await updateCohortStatuses(subRecord.user_id);
   }
 }
 
@@ -156,7 +159,6 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     return;
   }
 
-  // The subscription webhook will handle the actual subscription creation
   console.log(`Checkout completed for user ${userId}`);
 }
 
@@ -215,12 +217,10 @@ export async function POST(request: NextRequest) {
         break;
 
       case "invoice.payment_succeeded":
-        // Subscription payment succeeded - subscription webhook handles status
         console.log("Invoice payment succeeded:", event.data.object.id);
         break;
 
       case "invoice.payment_failed":
-        // Payment failed - subscription status will be updated via subscription webhook
         console.log("Invoice payment failed:", event.data.object.id);
         break;
 

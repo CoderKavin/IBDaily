@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { withAuthGet, success, errors, requireParam } from "@/lib/api-utils";
 import { computeLeaderboard, updateBestRank } from "@/lib/streak";
 
@@ -6,16 +6,9 @@ export const GET = withAuthGet(async ({ session, searchParams }) => {
   const cohortId = requireParam(searchParams, "cohortId");
 
   // Verify membership
-  const membership = await prisma.cohortMember.findUnique({
-    where: {
-      userId_cohortId: {
-        userId: session.user.id,
-        cohortId,
-      },
-    },
-    include: {
-      cohort: true,
-    },
+  const membership = await db.cohortMembers.findUnique({
+    user_id: session.user.id,
+    cohort_id: cohortId,
   });
 
   if (!membership) {

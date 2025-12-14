@@ -4,13 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma db push && next build",
-    "postinstall": "prisma generate",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "db:migrate": "npx prisma migrate dev",
-    "db:seed": "npx tsx prisma/seed.ts",
-    "db:reset": "npx prisma migrate reset --force",
     "test:tz": "npx tsx src/lib/timezone.test.ts",
     "test:cohort-status": "npx tsx src/lib/cohort-status.test.ts",
     "test:quality": "npx tsx src/lib/quality-check.test.ts",
@@ -18,7 +14,7 @@
     "test:all": "npm run test:tz && npm run test:cohort-status && npm run test:quality && npm run test:reminder"
   },
   "dependencies": {
-    "@prisma/client": "^5.22.0",
+    "@supabase/supabase-js": "^2.87.1",
     "bcryptjs": "^3.0.3",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
@@ -27,13 +23,9 @@
     "next": "16.0.10",
     "next-auth": "^5.0.0-beta.30",
     "nodemailer": "^7.0.11",
-    "prisma": "^5.22.0",
     "react": "19.2.1",
     "react-dom": "19.2.1",
     "stripe": "^20.0.0"
-  },
-  "prisma": {
-    "seed": "npx tsx prisma/seed.ts"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

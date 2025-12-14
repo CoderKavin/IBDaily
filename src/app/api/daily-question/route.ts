@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
+import { supabaseAdmin } from "@/lib/supabase";
 import { getIndiaDateKey, getWeekStartDateKey } from "@/lib/timezone";
 import { getAiClient, isAiEnabled, type DifficultyRung } from "@/lib/ai-client";
 
@@ -27,32 +28,25 @@ export async function GET(request: NextRequest) {
 
   // If subjectId provided, get specific question
   if (subjectId) {
-    const question = await prisma.dailyQuestion.findUnique({
-      where: {
-        userId_cohortId_dateKey_subjectId: {
-          userId: session.user.id,
-          cohortId,
-          dateKey: todayKey,
-          subjectId,
-        },
-      },
-      include: { subject: true, unit: true },
+    const question = await db.dailyQuestions.findUnique({
+      user_id: session.user.id,
+      cohort_id: cohortId,
+      date_key: todayKey,
+      subject_id: subjectId,
     });
 
     return NextResponse.json({ question, todayKey, aiEnabled: isAiEnabled() });
   }
 
   // Get all questions for today
-  const questions = await prisma.dailyQuestion.findMany({
-    where: {
-      userId: session.user.id,
-      cohortId,
-      dateKey: todayKey,
-    },
-    include: { subject: true, unit: true },
-  });
+  const { data: questions } = await supabaseAdmin
+    .from("daily_questions")
+    .select("*, subject:subjects(*), unit:units(*)")
+    .eq("user_id", session.user.id)
+    .eq("cohort_id", cohortId)
+    .eq("date_key", todayKey);
 
-  return NextResponse.json({ questions, todayKey, aiEnabled: isAiEnabled() });
+  return NextResponse.json({ questions: questions || [], todayKey, aiEnabled: isAiEnabled() });
 }
 
 // POST - generate a new question for today
@@ -87,10 +81,9 @@ export async function POST(request: NextRequest) {
   }
 
   // Verify membership
-  const membership = await prisma.cohortMember.findUnique({
-    where: {
-      userId_cohortId: { userId: session.user.id, cohortId },
-    },
+  const membership = await db.cohortMembers.findUnique({
+    user_id: session.user.id,
+    cohort_id: cohortId,
   });
 
   if (!membership) {
@@ -101,12 +94,8 @@ export async function POST(request: NextRequest) {
   }
 
   // Verify user has this subject and get level
-  const userSubject = await prisma.userSubject.findUnique({
-    where: {
-      userId_subjectId: { userId: session.user.id, subjectId },
-    },
-    include: { subject: true },
-  });
+  const userSubjects = await db.userSubjects.findByUser(session.user.id);
+  const userSubject = userSubjects.find((us) => us.subject_id === subjectId);
 
   if (!userSubject) {
     return NextResponse.json(
@@ -119,20 +108,17 @@ export async function POST(request: NextRequest) {
   const currentWeekStart = getWeekStartDateKey();
 
   // Get current week's unit selection
-  let weeklySelection = await prisma.weeklyUnitSelection.findUnique({
-    where: {
-      userId_subjectId_weekStartDateKey: {
-        userId: session.user.id,
-        subjectId,
-        weekStartDateKey: currentWeekStart,
-      },
-    },
-    include: { unit: true },
-  });
+  const { data: weeklySelection } = await supabaseAdmin
+    .from("weekly_unit_selections")
+    .select("*, unit:units(*)")
+    .eq("user_id", session.user.id)
+    .eq("subject_id", subjectId)
+    .eq("week_start_date_key", currentWeekStart)
+    .single();
 
   // Carry-forward: if no selection this week, check last week
-  if (!weeklySelection && userSubject.subject.hasUnits) {
-    // Calculate previous week's start
+  let unitSelection = weeklySelection;
+  if (!unitSelection && userSubject.subject.has_units) {
     const [year, month, day] = currentWeekStart.split("-").map(Number);
     const prevWeekDate = new Date(year, month - 1, day - 7);
     const prevWeekFormatter = new Intl.DateTimeFormat("en-CA", {
@@ -143,20 +129,19 @@ export async function POST(request: NextRequest) {
     });
     const previousWeekStart = prevWeekFormatter.format(prevWeekDate);
 
-    weeklySelection = await prisma.weeklyUnitSelection.findUnique({
-      where: {
-        userId_subjectId_weekStartDateKey: {
-          userId: session.user.id,
-          subjectId,
-          weekStartDateKey: previousWeekStart,
-        },
-      },
-      include: { unit: true },
-    });
+    const { data: lastWeekSelection } = await supabaseAdmin
+      .from("weekly_unit_selections")
+      .select("*, unit:units(*)")
+      .eq("user_id", session.user.id)
+      .eq("subject_id", subjectId)
+      .eq("week_start_date_key", previousWeekStart)
+      .single();
+
+    unitSelection = lastWeekSelection;
   }
 
-  // Check if subject has units - if so, require unit selection (current or carried-forward)
-  if (userSubject.subject.hasUnits && !weeklySelection) {
+  // Check if subject has units - if so, require unit selection
+  if (userSubject.subject.has_units && !unitSelection) {
     return NextResponse.json(
       {
         error: "Please select a weekly unit for this subject first",
@@ -167,16 +152,11 @@ export async function POST(request: NextRequest) {
   }
 
   // Check if question already exists for today
-  const existing = await prisma.dailyQuestion.findUnique({
-    where: {
-      userId_cohortId_dateKey_subjectId: {
-        userId: session.user.id,
-        cohortId,
-        dateKey: todayKey,
-        subjectId,
-      },
-    },
-    include: { subject: true, unit: true },
+  const existing = await db.dailyQuestions.findUnique({
+    user_id: session.user.id,
+    cohort_id: cohortId,
+    date_key: todayKey,
+    subject_id: subjectId,
   });
 
   if (existing) {
@@ -188,27 +168,24 @@ export async function POST(request: NextRequest) {
 
   try {
     const generated = await aiClient.generateQuestion({
-      subjectName: userSubject.subject.fullName,
+      subjectName: userSubject.subject.full_name,
       level: userSubject.level as "SL" | "HL",
-      unitName: weeklySelection?.unit.name || "General",
+      unitName: unitSelection?.unit.name || "General",
       difficultyRung: difficultyRung as DifficultyRung,
     });
 
     // Save the question
-    const question = await prisma.dailyQuestion.create({
-      data: {
-        userId: session.user.id,
-        cohortId,
-        dateKey: todayKey,
-        subjectId,
-        level: userSubject.level,
-        unitId: weeklySelection?.unitId || null,
-        difficultyRung,
-        questionText: generated.questionText,
-        markingGuideText: generated.markingGuideText,
-        commonMistakesText: generated.commonMistakesText,
-      },
-      include: { subject: true, unit: true },
+    const question = await db.dailyQuestions.create({
+      user_id: session.user.id,
+      cohort_id: cohortId,
+      date_key: todayKey,
+      subject_id: subjectId,
+      level: userSubject.level,
+      unit_id: unitSelection?.unit_id || null,
+      difficulty_rung: difficultyRung,
+      question_text: generated.questionText,
+      marking_guide_text: generated.markingGuideText,
+      common_mistakes_text: generated.commonMistakesText,
     });
 
     return NextResponse.json({ question });

@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import { withAuthGet, success, errors, requireParam } from "@/lib/api-utils";
 import {
   computeStreak,
@@ -12,16 +12,9 @@ export const GET = withAuthGet(async ({ session, searchParams }) => {
   const cohortId = requireParam(searchParams, "cohortId");
 
   // Verify membership
-  const membership = await prisma.cohortMember.findUnique({
-    where: {
-      userId_cohortId: {
-        userId: session.user.id,
-        cohortId,
-      },
-    },
-    include: {
-      cohort: true,
-    },
+  const membership = await db.cohortMembers.findUnique({
+    user_id: session.user.id,
+    cohort_id: cohortId,
   });
 
   if (!membership) {
@@ -41,14 +34,10 @@ export const GET = withAuthGet(async ({ session, searchParams }) => {
 
   // Get today's submission status
   const todayKey = getIndiaDateKey();
-  const todaySubmission = await prisma.submission.findUnique({
-    where: {
-      userId_cohortId_dateKey: {
-        userId: session.user.id,
-        cohortId,
-        dateKey: todayKey,
-      },
-    },
+  const todaySubmission = await db.submissions.findUnique({
+    user_id: session.user.id,
+    cohort_id: cohortId,
+    date_key: todayKey,
   });
 
   return success({

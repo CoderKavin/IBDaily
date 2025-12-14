@@ -1,6 +1,6 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { prisma } from "./prisma";
+import { supabaseAdmin } from "./supabase";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -22,28 +22,57 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const firebaseUid = credentials.firebaseUid as string;
           const name = (credentials.name as string) || null;
 
-          // Find or create user based on Firebase UID
-          let user = await prisma.user.findUnique({
-            where: { email },
-          });
+          // Find user by email
+          const { data: existingUser, error: findError } = await supabaseAdmin
+            .from("users")
+            .select("*")
+            .eq("email", email)
+            .single();
+
+          if (findError && findError.code !== "PGRST116") {
+            // PGRST116 = no rows found, which is fine for new users
+            console.error("Auth: Error finding user:", findError);
+            return null;
+          }
+
+          let user = existingUser;
 
           if (!user) {
             // Create new user with Firebase UID
-            user = await prisma.user.create({
-              data: {
+            const { data: newUser, error: createError } = await supabaseAdmin
+              .from("users")
+              .insert({
                 email,
-                firebaseUid,
+                firebase_uid: firebaseUid,
                 name,
-                password: "", // Not used with Firebase auth
-                onboardingCompleted: false,
-              },
-            });
-          } else if (!user.firebaseUid) {
+                password: "",
+                onboarding_completed: false,
+                onboarding_step: 0,
+              })
+              .select()
+              .single();
+
+            if (createError) {
+              console.error("Auth: Error creating user:", createError);
+              return null;
+            }
+
+            user = newUser;
+          } else if (!user.firebase_uid) {
             // Link existing user to Firebase
-            user = await prisma.user.update({
-              where: { id: user.id },
-              data: { firebaseUid },
-            });
+            const { data: updatedUser, error: updateError } = await supabaseAdmin
+              .from("users")
+              .update({ firebase_uid: firebaseUid })
+              .eq("id", user.id)
+              .select()
+              .single();
+
+            if (updateError) {
+              console.error("Auth: Error linking Firebase:", updateError);
+              return null;
+            }
+
+            user = updatedUser;
           }
 
           return {

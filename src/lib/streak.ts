@@ -1,4 +1,4 @@
-import { prisma } from "./prisma";
+import { db } from "./db";
 import {
   getIndiaDateKey,
   getLastNDays,
@@ -15,24 +15,21 @@ export async function updateBestStreak(
   cohortId: string,
   currentStreak: number,
 ): Promise<{ updated: boolean; bestStreak: number }> {
-  const membership = await prisma.cohortMember.findUnique({
-    where: { userId_cohortId: { userId, cohortId } },
-    select: { bestStreak: true },
+  const membership = await db.cohortMembers.findUnique({
+    user_id: userId,
+    cohort_id: cohortId,
   });
 
   if (!membership) {
     return { updated: false, bestStreak: 0 };
   }
 
-  if (currentStreak > membership.bestStreak) {
-    await prisma.cohortMember.update({
-      where: { userId_cohortId: { userId, cohortId } },
-      data: { bestStreak: currentStreak },
-    });
+  if (currentStreak > membership.best_streak) {
+    await db.cohortMembers.update(userId, cohortId, { best_streak: currentStreak });
     return { updated: true, bestStreak: currentStreak };
   }
 
-  return { updated: false, bestStreak: membership.bestStreak };
+  return { updated: false, bestStreak: membership.best_streak };
 }
 
 /**
@@ -44,9 +41,9 @@ export async function updateBestRank(
   cohortId: string,
   currentRank: number,
 ): Promise<{ updated: boolean; bestRank: number | null }> {
-  const membership = await prisma.cohortMember.findUnique({
-    where: { userId_cohortId: { userId, cohortId } },
-    select: { bestRank: true },
+  const membership = await db.cohortMembers.findUnique({
+    user_id: userId,
+    cohort_id: cohortId,
   });
 
   if (!membership) {
@@ -54,15 +51,12 @@ export async function updateBestRank(
   }
 
   // Lower rank is better. Update if no bestRank yet or if current is better
-  if (membership.bestRank === null || currentRank < membership.bestRank) {
-    await prisma.cohortMember.update({
-      where: { userId_cohortId: { userId, cohortId } },
-      data: { bestRank: currentRank },
-    });
+  if (membership.best_rank === null || currentRank < membership.best_rank) {
+    await db.cohortMembers.update(userId, cohortId, { best_rank: currentRank });
     return { updated: true, bestRank: currentRank };
   }
 
-  return { updated: false, bestRank: membership.bestRank };
+  return { updated: false, bestRank: membership.best_rank };
 }
 
 /**
@@ -72,14 +66,14 @@ export async function getBestStats(
   userId: string,
   cohortId: string,
 ): Promise<{ bestStreak: number; bestRank: number | null }> {
-  const membership = await prisma.cohortMember.findUnique({
-    where: { userId_cohortId: { userId, cohortId } },
-    select: { bestStreak: true, bestRank: true },
+  const membership = await db.cohortMembers.findUnique({
+    user_id: userId,
+    cohort_id: cohortId,
   });
 
   return {
-    bestStreak: membership?.bestStreak ?? 0,
-    bestRank: membership?.bestRank ?? null,
+    bestStreak: membership?.best_streak ?? 0,
+    bestRank: membership?.best_rank ?? null,
   };
 }
 
@@ -133,14 +127,11 @@ export async function computeStreak(
   const today = getIndiaDateKey();
   const now = new Date();
 
-  // Get all submissions for this user in this cohort, ordered by dateKey desc
-  const submissions = await prisma.submission.findMany({
-    where: { userId, cohortId },
-    orderBy: { dateKey: "desc" },
-  });
+  // Get all submissions for this user in this cohort
+  const submissions = await db.submissions.findByUserAndCohort(userId, cohortId);
 
   // Build a map of dateKey -> submission
-  const submissionMap = new Map(submissions.map((s) => [s.dateKey, s]));
+  const submissionMap = new Map(submissions.map((s) => [s.date_key, s]));
 
   let streak = 0;
   const checkDate = new Date(now);
@@ -167,7 +158,7 @@ export async function computeStreak(
       break;
     }
 
-    if (!computeOnTime(submission.createdAt, dateKey)) {
+    if (!computeOnTime(new Date(submission.created_at), dateKey)) {
       break;
     }
 
@@ -188,28 +179,21 @@ export async function computeCalendar(
 ): Promise<CalendarDay[]> {
   const days = getLastNDays(lastNDays);
 
-  // Get all submissions for these days
-  const submissions = await prisma.submission.findMany({
-    where: {
-      userId,
-      cohortId,
-      dateKey: { in: days },
-    },
-  });
+  // Get all submissions for this user in this cohort
+  const allSubmissions = await db.submissions.findByUserAndCohort(userId, cohortId);
 
-  const submissionMap = new Map(submissions.map((s) => [s.dateKey, s]));
+  // Filter to only the days we care about
+  const submissions = allSubmissions.filter(s => days.includes(s.date_key));
+  const submissionMap = new Map(submissions.map((s) => [s.date_key, s]));
 
   return days.map((dateKey) => {
     const submission = submissionMap.get(dateKey);
 
-    // For today, if deadline hasn't passed and no submission, it's still pending (show as missed for simplicity)
     if (!submission) {
-      // If it's today and deadline hasn't passed, don't mark as missed yet
-      // But for simplicity in the calendar, we'll show it as missed if no submission
       return { dateKey, status: "missed" as const };
     }
 
-    if (computeOnTime(submission.createdAt, dateKey)) {
+    if (computeOnTime(new Date(submission.created_at), dateKey)) {
       return { dateKey, status: "on-time" as const };
     }
 
@@ -225,37 +209,33 @@ export async function computeLeaderboard(
   cohortId: string,
 ): Promise<LeaderboardEntry[]> {
   // Get all members of the cohort
-  const members = await prisma.cohortMember.findMany({
-    where: { cohortId },
-    include: { user: true },
-  });
+  const members = await db.cohortMembers.findByCohort(cohortId);
 
   const now = new Date();
   const last30Days = getLastNDays(30);
 
-  // Get all submissions for this cohort in the last 30 days
-  const submissions = await prisma.submission.findMany({
-    where: {
-      cohortId,
-      dateKey: { in: last30Days },
-    },
-  });
+  // Get all submissions for this cohort
+  const allSubmissions = await db.submissions.findMany({ cohort_id: cohortId });
+
+  // Filter to last 30 days
+  const submissions = allSubmissions.filter(s => last30Days.includes(s.date_key));
 
   // Group submissions by userId
   const userSubmissions = new Map<string, typeof submissions>();
   for (const sub of submissions) {
-    if (!userSubmissions.has(sub.userId)) {
-      userSubmissions.set(sub.userId, []);
+    if (!userSubmissions.has(sub.user_id)) {
+      userSubmissions.set(sub.user_id, []);
     }
-    userSubmissions.get(sub.userId)!.push(sub);
+    userSubmissions.get(sub.user_id)!.push(sub);
   }
 
   // Calculate stats for each member
   const entries: Omit<LeaderboardEntry, "rank" | "tier">[] = [];
 
   for (const member of members) {
-    const subs = userSubmissions.get(member.userId) || [];
-    const subMap = new Map(subs.map((s) => [s.dateKey, s]));
+    const user = member.user;
+    const subs = userSubmissions.get(member.user_id) || [];
+    const subMap = new Map(subs.map((s) => [s.date_key, s]));
 
     // Calculate current streak
     let streak = 0;
@@ -276,7 +256,7 @@ export async function computeLeaderboard(
         const dateKey = getIndiaDateKey(checkDate);
         const submission = subMap.get(dateKey);
 
-        if (!submission || !computeOnTime(submission.createdAt, dateKey)) {
+        if (!submission || !computeOnTime(new Date(submission.created_at), dateKey)) {
           break;
         }
 
@@ -288,24 +268,24 @@ export async function computeLeaderboard(
     // Count GOOD on-time submissions in last 30 days (for tiebreaker)
     const onTimeCount = subs.filter(
       (s) =>
-        computeOnTime(s.createdAt, s.dateKey) && s.qualityStatus === "GOOD",
+        computeOnTime(new Date(s.created_at), s.date_key) && s.quality_status === "GOOD",
     ).length;
 
     // Get latest submission time
     const latestSubmission =
       subs.length > 0
         ? subs.reduce((latest, s) =>
-            s.createdAt > latest.createdAt ? s : latest,
+            new Date(s.created_at) > new Date(latest.created_at) ? s : latest,
           )
         : null;
 
     entries.push({
-      userId: member.userId,
-      userName: member.user.name,
-      userEmail: member.user.email,
+      userId: member.user_id,
+      userName: user?.name || null,
+      userEmail: user?.email || "",
       currentStreak: streak,
       onTimeCount30Days: onTimeCount,
-      latestSubmissionTime: latestSubmission?.createdAt || null,
+      latestSubmissionTime: latestSubmission ? new Date(latestSubmission.created_at) : null,
     });
   }
 

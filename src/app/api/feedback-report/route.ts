@@ -1,15 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { z } from "zod";
+import { db } from "@/lib/db";
+import { supabaseAdmin } from "@/lib/supabase";
 
 const VALID_REASONS = ["WRONG", "CONFUSING", "TOO_HARSH", "OTHER"] as const;
-
-const reportSchema = z.object({
-  submissionId: z.string().min(1),
-  reason: z.enum(VALID_REASONS),
-  notes: z.string().max(500).optional(),
-});
 
 // POST - Report AI feedback issue
 export async function POST(request: NextRequest) {
@@ -20,13 +14,28 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const parsed = reportSchema.parse(body);
+    const { submissionId, reason, notes } = body;
+
+    if (!submissionId || !reason) {
+      return NextResponse.json(
+        { error: "submissionId and reason are required" },
+        { status: 400 },
+      );
+    }
+
+    if (!VALID_REASONS.includes(reason)) {
+      return NextResponse.json(
+        { error: "Invalid reason" },
+        { status: 400 },
+      );
+    }
 
     // Verify the submission belongs to the user
-    const submission = await prisma.submission.findUnique({
-      where: { id: parsed.submissionId },
-      select: { id: true, userId: true },
-    });
+    const { data: submission } = await supabaseAdmin
+      .from("submissions")
+      .select("id, user_id")
+      .eq("id", submissionId)
+      .single();
 
     if (!submission) {
       return NextResponse.json(
@@ -35,7 +44,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (submission.userId !== session.user.id) {
+    if (submission.user_id !== session.user.id) {
       return NextResponse.json(
         { error: "You can only report feedback on your own submissions" },
         { status: 403 },
@@ -43,22 +52,24 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user already reported this submission
-    const existingReport = await prisma.aIFeedbackReport.findFirst({
-      where: {
-        userId: session.user.id,
-        submissionId: parsed.submissionId,
-      },
-    });
+    const { data: existingReport } = await supabaseAdmin
+      .from("ai_feedback_reports")
+      .select("*")
+      .eq("user_id", session.user.id)
+      .eq("submission_id", submissionId)
+      .single();
 
     if (existingReport) {
       // Update existing report
-      const updated = await prisma.aIFeedbackReport.update({
-        where: { id: existingReport.id },
-        data: {
-          reason: parsed.reason,
-          notes: parsed.notes || null,
-        },
-      });
+      const { data: updated } = await supabaseAdmin
+        .from("ai_feedback_reports")
+        .update({
+          reason,
+          notes: notes || null,
+        })
+        .eq("id", existingReport.id)
+        .select()
+        .single();
 
       return NextResponse.json({
         report: updated,
@@ -66,21 +77,23 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Create new report and hide the feedback
-    const [report] = await prisma.$transaction([
-      prisma.aIFeedbackReport.create({
-        data: {
-          userId: session.user.id,
-          submissionId: parsed.submissionId,
-          reason: parsed.reason,
-          notes: parsed.notes || null,
-        },
-      }),
-      prisma.submission.update({
-        where: { id: parsed.submissionId },
-        data: { feedbackHidden: true },
-      }),
-    ]);
+    // Create new report
+    const { data: report } = await supabaseAdmin
+      .from("ai_feedback_reports")
+      .insert({
+        user_id: session.user.id,
+        submission_id: submissionId,
+        reason,
+        notes: notes || null,
+      })
+      .select()
+      .single();
+
+    // Hide the feedback
+    await supabaseAdmin
+      .from("submissions")
+      .update({ feedback_hidden: true })
+      .eq("id", submissionId);
 
     return NextResponse.json({
       report,
@@ -88,12 +101,6 @@ export async function POST(request: NextRequest) {
       message: "Report submitted and feedback hidden",
     });
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: "Invalid request data", details: error.issues },
-        { status: 400 },
-      );
-    }
     console.error("Error submitting feedback report:", error);
     return NextResponse.json(
       { error: "Failed to submit report" },
@@ -102,7 +109,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET - Get user's reports (optional, for showing existing reports)
+// GET - Get user's reports
 export async function GET(request: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -113,25 +120,24 @@ export async function GET(request: NextRequest) {
   const submissionId = searchParams.get("submissionId");
 
   if (submissionId) {
-    // Get report for specific submission
-    const report = await prisma.aIFeedbackReport.findFirst({
-      where: {
-        userId: session.user.id,
-        submissionId,
-      },
-    });
+    const { data: report } = await supabaseAdmin
+      .from("ai_feedback_reports")
+      .select("*")
+      .eq("user_id", session.user.id)
+      .eq("submission_id", submissionId)
+      .single();
 
     return NextResponse.json({ report });
   }
 
-  // Get all user's reports
-  const reports = await prisma.aIFeedbackReport.findMany({
-    where: { userId: session.user.id },
-    orderBy: { createdAt: "desc" },
-    take: 50,
-  });
+  const { data: reports } = await supabaseAdmin
+    .from("ai_feedback_reports")
+    .select("*")
+    .eq("user_id", session.user.id)
+    .order("created_at", { ascending: false })
+    .limit(50);
 
-  return NextResponse.json({ reports });
+  return NextResponse.json({ reports: reports || [] });
 }
 
 // DELETE - Remove a report
@@ -151,25 +157,27 @@ export async function DELETE(request: NextRequest) {
     );
   }
 
-  // Verify ownership
-  const report = await prisma.aIFeedbackReport.findUnique({
-    where: { id: reportId },
-  });
+  const { data: report } = await supabaseAdmin
+    .from("ai_feedback_reports")
+    .select("*")
+    .eq("id", reportId)
+    .single();
 
   if (!report) {
     return NextResponse.json({ error: "Report not found" }, { status: 404 });
   }
 
-  if (report.userId !== session.user.id) {
+  if (report.user_id !== session.user.id) {
     return NextResponse.json(
       { error: "You can only delete your own reports" },
       { status: 403 },
     );
   }
 
-  await prisma.aIFeedbackReport.delete({
-    where: { id: reportId },
-  });
+  await supabaseAdmin
+    .from("ai_feedback_reports")
+    .delete()
+    .eq("id", reportId);
 
   return NextResponse.json({ message: "Report deleted" });
 }

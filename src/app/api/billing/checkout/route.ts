@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 import {
   isStripeConfigured,
   getStripeConfig,
@@ -28,19 +28,18 @@ export async function POST(request: NextRequest) {
 
   try {
     // Get user with current subscription status
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      include: { subscription: true },
-    });
+    const user = await db.users.findUnique({ id: session.user.id });
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    const subscription = await db.subscriptions.findByUser(session.user.id);
+
     // Check if user already has an active subscription
     if (
-      user.subscription?.status === "active" &&
-      user.subscription.currentPeriodEnd > new Date()
+      subscription?.status === "active" &&
+      new Date(subscription.current_period_end) > new Date()
     ) {
       return NextResponse.json(
         { error: "You already have an active subscription" },
@@ -52,15 +51,12 @@ export async function POST(request: NextRequest) {
     const customerId = await getOrCreateStripeCustomer(
       user.id,
       user.email,
-      user.stripeCustomerId
+      user.stripe_customer_id
     );
 
     // Update user with Stripe customer ID if new
-    if (!user.stripeCustomerId) {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { stripeCustomerId: customerId },
-      });
+    if (!user.stripe_customer_id) {
+      await db.users.update(user.id, { stripe_customer_id: customerId });
     }
 
     // Get origin for redirect URLs

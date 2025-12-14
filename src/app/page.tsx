@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { db } from "@/lib/db";
 
 export default async function Home() {
   const session = await auth();
@@ -10,12 +10,9 @@ export default async function Home() {
   }
 
   // Check if user has completed onboarding
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { onboardingCompleted: true },
-  });
+  const user = await db.users.findUnique({ id: session.user.id });
 
-  if (!user?.onboardingCompleted) {
+  if (!user?.onboarding_completed) {
     redirect("/onboarding");
   }
 
