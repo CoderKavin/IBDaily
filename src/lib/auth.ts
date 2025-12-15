@@ -1,6 +1,6 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { supabaseAdmin } from "./supabase";
+import { supabaseAdmin, isSupabaseConfigured } from "./supabase";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -12,67 +12,66 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         name: { label: "Name", type: "text" },
       },
       async authorize(credentials) {
+        // Check if Supabase is configured
+        if (!isSupabaseConfigured()) {
+          console.error("Auth: Supabase not configured");
+          return null;
+        }
+
+        if (!credentials?.email || !credentials?.firebaseUid) {
+          console.error("Auth: Missing email or firebaseUid");
+          return null;
+        }
+
+        const email = credentials.email as string;
+        const firebaseUid = credentials.firebaseUid as string;
+        const name = (credentials.name as string) || null;
+
         try {
-          if (!credentials?.email || !credentials?.firebaseUid) {
-            console.error("Auth: Missing email or firebaseUid");
-            return null;
-          }
-
-          const email = credentials.email as string;
-          const firebaseUid = credentials.firebaseUid as string;
-          const name = (credentials.name as string) || null;
-
-          // Find user by email
+          // Try to find existing user
           const { data: existingUser, error: findError } = await supabaseAdmin
             .from("users")
             .select("*")
             .eq("email", email)
-            .single();
+            .maybeSingle();
 
-          if (findError && findError.code !== "PGRST116") {
-            // PGRST116 = no rows found, which is fine for new users
-            console.error("Auth: Error finding user:", findError);
+          if (findError) {
+            console.error("Auth: Error finding user:", findError.message);
             return null;
           }
 
           let user = existingUser;
 
           if (!user) {
-            // Create new user with Firebase UID
+            // Create new user
             const { data: newUser, error: createError } = await supabaseAdmin
               .from("users")
               .insert({
                 email,
                 firebase_uid: firebaseUid,
                 name,
-                password: "",
-                onboarding_completed: false,
-                onboarding_step: 0,
               })
               .select()
               .single();
 
             if (createError) {
-              console.error("Auth: Error creating user:", createError);
+              console.error("Auth: Error creating user:", createError.message);
               return null;
             }
 
             user = newUser;
+            console.log("Auth: Created new user:", user.id);
           } else if (!user.firebase_uid) {
-            // Link existing user to Firebase
-            const { data: updatedUser, error: updateError } = await supabaseAdmin
+            // Link Firebase UID to existing user
+            const { error: updateError } = await supabaseAdmin
               .from("users")
               .update({ firebase_uid: firebaseUid })
-              .eq("id", user.id)
-              .select()
-              .single();
+              .eq("id", user.id);
 
             if (updateError) {
-              console.error("Auth: Error linking Firebase:", updateError);
+              console.error("Auth: Error linking Firebase:", updateError.message);
               return null;
             }
-
-            user = updatedUser;
           }
 
           return {
@@ -81,7 +80,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             name: user.name,
           };
         } catch (error) {
-          console.error("Auth authorize error:", error);
+          console.error("Auth: Unexpected error:", error);
           return null;
         }
       },
