@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { supabaseAdmin } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase";
 import { getIndiaDateKey, getWeekStartDateKey } from "@/lib/timezone";
 import { getAiClient, isAiEnabled, type DifficultyRung } from "@/lib/ai-client";
 
@@ -39,7 +39,8 @@ export async function GET(request: NextRequest) {
   }
 
   // Get all questions for today
-  const { data: questions } = await supabaseAdmin
+  const supabase = getSupabaseAdmin();
+  const { data: questions } = await supabase
     .from("daily_questions")
     .select("*, subject:subjects(*), unit:units(*)")
     .eq("user_id", session.user.id)
@@ -106,19 +107,20 @@ export async function POST(request: NextRequest) {
 
   const todayKey = getIndiaDateKey();
   const currentWeekStart = getWeekStartDateKey();
+  const supabase = getSupabaseAdmin();
 
   // Get current week's unit selection
-  const { data: weeklySelection } = await supabaseAdmin
+  const { data: weeklySelection } = await supabase
     .from("weekly_unit_selections")
     .select("*, unit:units(*)")
     .eq("user_id", session.user.id)
     .eq("subject_id", subjectId)
     .eq("week_start_date_key", currentWeekStart)
-    .single();
+    .maybeSingle();
 
   // Carry-forward: if no selection this week, check last week
   let unitSelection = weeklySelection;
-  if (!unitSelection && userSubject.subject.has_units) {
+  if (!unitSelection && userSubject.subject?.has_units) {
     const [year, month, day] = currentWeekStart.split("-").map(Number);
     const prevWeekDate = new Date(year, month - 1, day - 7);
     const prevWeekFormatter = new Intl.DateTimeFormat("en-CA", {
@@ -129,19 +131,19 @@ export async function POST(request: NextRequest) {
     });
     const previousWeekStart = prevWeekFormatter.format(prevWeekDate);
 
-    const { data: lastWeekSelection } = await supabaseAdmin
+    const { data: lastWeekSelection } = await supabase
       .from("weekly_unit_selections")
       .select("*, unit:units(*)")
       .eq("user_id", session.user.id)
       .eq("subject_id", subjectId)
       .eq("week_start_date_key", previousWeekStart)
-      .single();
+      .maybeSingle();
 
     unitSelection = lastWeekSelection;
   }
 
   // Check if subject has units - if so, require unit selection
-  if (userSubject.subject.has_units && !unitSelection) {
+  if (userSubject.subject?.has_units && !unitSelection) {
     return NextResponse.json(
       {
         error: "Please select a weekly unit for this subject first",
@@ -168,9 +170,9 @@ export async function POST(request: NextRequest) {
 
   try {
     const generated = await aiClient.generateQuestion({
-      subjectName: userSubject.subject.full_name,
+      subjectName: userSubject.subject?.full_name || 'Unknown Subject',
       level: userSubject.level as "SL" | "HL",
-      unitName: unitSelection?.unit.name || "General",
+      unitName: unitSelection?.unit?.name || "General",
       difficultyRung: difficultyRung as DifficultyRung,
     });
 

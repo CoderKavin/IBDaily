@@ -47,8 +47,8 @@ export const GET = withAuthGet(async ({ session, searchParams }) => {
     todaySubmission,
     timeUntilDeadline: getTimeUntilDeadline(),
     cohort: {
-      id: membership.cohort.id,
-      name: membership.cohort.name,
+      id: membership.cohort?.id || cohortId,
+      name: membership.cohort?.name || 'Unknown',
     },
     bestStreak: bestStats.bestStreak,
     bestRank: bestStats.bestRank,

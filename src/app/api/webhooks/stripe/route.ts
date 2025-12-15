@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import Stripe from "stripe";
 import { db } from "@/lib/db";
-import { supabaseAdmin } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase";
 import { constructWebhookEvent, getStripeConfig } from "@/lib/stripe";
 import { ACTIVATION_THRESHOLD } from "@/lib/cohort-status";
 
@@ -26,12 +26,14 @@ async function updateCohortStatuses(userId: string) {
  * Recompute a cohort's status based on current paid member count
  */
 async function recomputeCohortStatus(cohortId: string) {
+  const supabase = getSupabaseAdmin();
+
   // Get cohort
-  const { data: cohort } = await supabaseAdmin
+  const { data: cohort } = await supabase
     .from("cohorts")
     .select("*")
     .eq("id", cohortId)
-    .single();
+    .maybeSingle();
 
   if (!cohort) return;
 
@@ -53,7 +55,7 @@ async function recomputeCohortStatus(cohortId: string) {
 
   // Update cohort status if needed
   if (shouldActivate && cohort.status !== "ACTIVE") {
-    await supabaseAdmin
+    await supabase
       .from("cohorts")
       .update({
         status: "ACTIVE",
@@ -68,6 +70,7 @@ async function recomputeCohortStatus(cohortId: string) {
  * Handle subscription created/updated
  */
 async function handleSubscriptionChange(subscription: Stripe.Subscription) {
+  const supabase = getSupabaseAdmin();
   const userId = subscription.metadata.userId;
 
   if (!userId) {
@@ -88,14 +91,14 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
     Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60;
 
   // Upsert subscription record
-  const { data: existing } = await supabaseAdmin
+  const { data: existing } = await supabase
     .from("subscriptions")
     .select("*")
     .eq("stripe_subscription_id", subscription.id)
-    .single();
+    .maybeSingle();
 
   if (existing) {
-    await supabaseAdmin
+    await supabase
       .from("subscriptions")
       .update({
         status: subscription.status,
@@ -104,7 +107,7 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
       })
       .eq("stripe_subscription_id", subscription.id);
   } else {
-    await supabaseAdmin.from("subscriptions").insert({
+    await supabase.from("subscriptions").insert({
       user_id: userId,
       stripe_customer_id: customerId,
       stripe_subscription_id: subscription.id,
@@ -125,8 +128,10 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
  * Handle subscription deleted
  */
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
+  const supabase = getSupabaseAdmin();
+
   // Update subscription status to canceled
-  await supabaseAdmin
+  await supabase
     .from("subscriptions")
     .update({
       status: "canceled",
@@ -137,11 +142,11 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   console.log(`Subscription ${subscription.id} deleted/canceled`);
 
   // Get userId from subscription record
-  const { data: subRecord } = await supabaseAdmin
+  const { data: subRecord } = await supabase
     .from("subscriptions")
     .select("*")
     .eq("stripe_subscription_id", subscription.id)
-    .single();
+    .maybeSingle();
 
   if (subRecord) {
     await updateCohortStatuses(subRecord.user_id);

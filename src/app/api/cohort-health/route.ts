@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { supabaseAdmin } from "@/lib/supabase";
 import { getIndiaDateKey, getLastNDays } from "@/lib/timezone";
 
 interface DailyStats {
@@ -242,7 +241,7 @@ export async function GET(request: NextRequest) {
 
   const healthData: CohortHealthData = {
     cohortId,
-    cohortName: membership.cohort.name,
+    cohortName: membership.cohort?.name || 'Unknown',
     totalMembers: members.length,
     activeMembers,
     atRiskMembers,

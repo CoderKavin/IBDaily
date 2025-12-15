@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { supabaseAdmin } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase";
 import {
   withAuthGet,
   withAuth,
@@ -25,6 +25,7 @@ function getPreviousWeekStartDateKey(currentWeekStart: string): string {
 
 // GET - get current week's unit selections
 export const GET = withAuthGet(async ({ session, searchParams }) => {
+  const supabase = getSupabaseAdmin();
   const subjectId = searchParams.get("subjectId");
 
   const currentWeekStart = getWeekStartDateKey();
@@ -32,25 +33,25 @@ export const GET = withAuthGet(async ({ session, searchParams }) => {
 
   if (subjectId) {
     // Get selection for specific subject
-    const { data: selection } = await supabaseAdmin
+    const { data: selection } = await supabase
       .from("weekly_unit_selections")
       .select("*, unit:units(*), subject:subjects(*)")
       .eq("user_id", session.user.id)
       .eq("subject_id", subjectId)
       .eq("week_start_date_key", currentWeekStart)
-      .single();
+      .maybeSingle();
 
     // Carry-forward: if no selection this week, check last week
     if (!selection) {
-      const { data: lastWeekSelection } = await supabaseAdmin
+      const { data: lastWeekSelection } = await supabase
         .from("weekly_unit_selections")
         .select("*, unit:units(*), subject:subjects(*)")
         .eq("user_id", session.user.id)
         .eq("subject_id", subjectId)
         .eq("week_start_date_key", previousWeekStart)
-        .single();
+        .maybeSingle();
 
-      if (lastWeekSelection) {
+      if (lastWeekSelection && lastWeekSelection.unit) {
         return success({
           selection: null,
           suggestedUnit: {
@@ -83,31 +84,31 @@ export const GET = withAuthGet(async ({ session, searchParams }) => {
   // For subjects without current week selection, check last week
   const subjectsWithSelection = new Set(selections.map((s) => s.subject_id));
   const subjectsNeedingSelection = userSubjects.filter(
-    (us) => us.subject.has_units && !subjectsWithSelection.has(us.subject_id),
+    (us) => us.subject?.has_units && !subjectsWithSelection.has(us.subject_id),
   );
 
   // Get last week's selections for subjects needing carry-forward
   const lastWeekSelections = await Promise.all(
     subjectsNeedingSelection.map(async (s) => {
-      const { data } = await supabaseAdmin
+      const { data } = await supabase
         .from("weekly_unit_selections")
         .select("*, unit:units(*), subject:subjects(*)")
         .eq("user_id", session.user.id)
         .eq("subject_id", s.subject_id)
         .eq("week_start_date_key", previousWeekStart)
-        .single();
+        .maybeSingle();
       return data;
     })
   );
 
   // Build suggested units map
   const suggestedUnits = lastWeekSelections
-    .filter(Boolean)
+    .filter((lws): lws is NonNullable<typeof lws> => lws !== null && lws.unit !== null && lws.subject !== null)
     .map((lws) => ({
-      subjectId: lws!.subject_id,
-      subjectName: lws!.subject.transcript_name,
-      unitId: lws!.unit.id,
-      unitName: lws!.unit.name,
+      subjectId: lws.subject_id,
+      subjectName: lws.subject?.transcript_name || 'Unknown',
+      unitId: lws.unit?.id || '',
+      unitName: lws.unit?.name || 'Unknown',
       fromLastWeek: true,
     }));
 
@@ -123,6 +124,7 @@ export const POST = withAuth<{
   subjectId: string;
   unitId: string;
 }>(async ({ session, body }) => {
+  const supabase = getSupabaseAdmin();
   const { subjectId, unitId } = body;
 
   if (!subjectId || !unitId) {
@@ -154,22 +156,23 @@ export const POST = withAuth<{
   const currentWeekStart = getWeekStartDateKey();
 
   // Check if already set this week - ENFORCE ONCE PER WEEK
-  const { data: existing } = await supabaseAdmin
+  const { data: existing } = await supabase
     .from("weekly_unit_selections")
     .select("*, unit:units(*)")
     .eq("user_id", session.user.id)
     .eq("subject_id", subjectId)
     .eq("week_start_date_key", currentWeekStart)
-    .single();
+    .maybeSingle();
 
   if (existing) {
+    const unitName = existing.unit?.name || 'a unit';
     return errors.validation(
-      `You already selected "${existing.unit.name}" for this week. You can change it next week.`,
+      `You already selected "${unitName}" for this week. You can change it next week.`,
     );
   }
 
   // Create new selection
-  await supabaseAdmin.from("weekly_unit_selections").insert({
+  await supabase.from("weekly_unit_selections").insert({
     user_id: session.user.id,
     subject_id: subjectId,
     unit_id: unitId,

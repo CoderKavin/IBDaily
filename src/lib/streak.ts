@@ -51,7 +51,7 @@ export async function updateBestRank(
   }
 
   // Lower rank is better. Update if no bestRank yet or if current is better
-  if (membership.best_rank === null || currentRank < membership.best_rank) {
+  if (membership.best_rank === null || membership.best_rank === undefined || currentRank < membership.best_rank) {
     await db.cohortMembers.update(userId, cohortId, { best_rank: currentRank });
     return { updated: true, bestRank: currentRank };
   }

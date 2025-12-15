@@ -28,8 +28,8 @@ export const GET = withAuthGet(async ({ session, searchParams }) => {
   return success({
     leaderboard,
     cohort: {
-      id: membership.cohort.id,
-      name: membership.cohort.name,
+      id: membership.cohort?.id || cohortId,
+      name: membership.cohort?.name || 'Unknown',
     },
     currentUserId: session.user.id,
   });

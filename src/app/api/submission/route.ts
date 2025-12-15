@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { supabaseAdmin } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase";
 import {
   withAuthGet,
   withAuth,
@@ -19,13 +19,15 @@ async function checkCohortCanSubmit(cohortId: string): Promise<{
   status: CohortStatus;
   reason?: string;
 }> {
-  const { data: cohort } = await supabaseAdmin
+  const supabase = getSupabaseAdmin();
+
+  const { data: cohort, error } = await supabase
     .from("cohorts")
     .select("*")
     .eq("id", cohortId)
-    .single();
+    .maybeSingle();
 
-  if (!cohort) {
+  if (error || !cohort) {
     return { canSubmit: false, status: "LOCKED", reason: "Cohort not found" };
   }
 
@@ -50,7 +52,7 @@ async function checkCohortCanSubmit(cohortId: string): Promise<{
 
   // Update cohort status in DB if it changed
   if (statusInfo.status !== cohort.status) {
-    await supabaseAdmin
+    await supabase
       .from("cohorts")
       .update({
         status: statusInfo.status,
@@ -103,11 +105,11 @@ export const GET = withAuthGet(async ({ session, searchParams }) => {
 
   // Format subjects for dropdown: "Subject Name (SL/HL)"
   const subjects = userSubjects.map((us) => ({
-    id: us.subject.id,
-    label: `${us.subject.transcript_name} ${us.level}`,
-    fullName: us.subject.full_name,
+    id: us.subject?.id || us.subject_id,
+    label: `${us.subject?.transcript_name || 'Unknown'} ${us.level}`,
+    fullName: us.subject?.full_name || '',
     level: us.level,
-    hasUnits: us.subject.has_units,
+    hasUnits: us.subject?.has_units || false,
   }));
 
   // Check if user needs onboarding
@@ -134,11 +136,15 @@ export const POST = withAuth<{
 }>(async ({ session, body }) => {
   const { cohortId, subjectId, bullet1, bullet2, bullet3 } = body;
 
-  if (!cohortId || !subjectId || !bullet1 || !bullet2 || !bullet3) {
-    return errors.validation("All fields are required");
+  if (!cohortId || !subjectId) {
+    return errors.validation("Cohort and subject are required");
   }
 
-  const bullets = [bullet1, bullet2, bullet3];
+  if (!bullet1 && !bullet2 && !bullet3) {
+    return errors.validation("At least one bullet point is required");
+  }
+
+  const bullets = [bullet1 || "", bullet2 || "", bullet3 || ""];
   const todayKey = getIndiaDateKey();
 
   // Get yesterday's submission for similarity check
@@ -193,7 +199,7 @@ export const POST = withAuth<{
     return errors.validation("You don't have this subject selected");
   }
 
-  const subjectDisplayName = `${userSubject.subject.transcript_name} ${userSubject.level}`;
+  const subjectDisplayName = `${userSubject.subject?.transcript_name || 'Unknown'} ${userSubject.level}`;
 
   // Upsert submission with quality status
   const submission = await db.submissions.upsert(
@@ -205,9 +211,9 @@ export const POST = withAuth<{
     {
       subject_id: subjectId,
       subject: subjectDisplayName,
-      bullet1,
-      bullet2,
-      bullet3,
+      bullet1: bullet1 || "",
+      bullet2: bullet2 || "",
+      bullet3: bullet3 || "",
       quality_status: qualityResult.status,
       quality_reasons: JSON.stringify(qualityResult.reasons),
     }

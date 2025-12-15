@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { supabaseAdmin } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase";
 
 const VALID_REASONS = ["WRONG", "CONFUSING", "TOO_HARSH", "OTHER"] as const;
 
@@ -13,6 +12,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const supabase = getSupabaseAdmin();
     const body = await request.json();
     const { submissionId, reason, notes } = body;
 
@@ -31,11 +31,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify the submission belongs to the user
-    const { data: submission } = await supabaseAdmin
+    const { data: submission } = await supabase
       .from("submissions")
       .select("id, user_id")
       .eq("id", submissionId)
-      .single();
+      .maybeSingle();
 
     if (!submission) {
       return NextResponse.json(
@@ -52,16 +52,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user already reported this submission
-    const { data: existingReport } = await supabaseAdmin
+    const { data: existingReport } = await supabase
       .from("ai_feedback_reports")
       .select("*")
       .eq("user_id", session.user.id)
       .eq("submission_id", submissionId)
-      .single();
+      .maybeSingle();
 
     if (existingReport) {
       // Update existing report
-      const { data: updated } = await supabaseAdmin
+      const { data: updated } = await supabase
         .from("ai_feedback_reports")
         .update({
           reason,
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create new report
-    const { data: report } = await supabaseAdmin
+    const { data: report } = await supabase
       .from("ai_feedback_reports")
       .insert({
         user_id: session.user.id,
@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     // Hide the feedback
-    await supabaseAdmin
+    await supabase
       .from("submissions")
       .update({ feedback_hidden: true })
       .eq("id", submissionId);
@@ -116,21 +116,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const supabase = getSupabaseAdmin();
   const { searchParams } = new URL(request.url);
   const submissionId = searchParams.get("submissionId");
 
   if (submissionId) {
-    const { data: report } = await supabaseAdmin
+    const { data: report } = await supabase
       .from("ai_feedback_reports")
       .select("*")
       .eq("user_id", session.user.id)
       .eq("submission_id", submissionId)
-      .single();
+      .maybeSingle();
 
     return NextResponse.json({ report });
   }
 
-  const { data: reports } = await supabaseAdmin
+  const { data: reports } = await supabase
     .from("ai_feedback_reports")
     .select("*")
     .eq("user_id", session.user.id)
@@ -147,6 +148,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const supabase = getSupabaseAdmin();
   const { searchParams } = new URL(request.url);
   const reportId = searchParams.get("reportId");
 
@@ -157,11 +159,11 @@ export async function DELETE(request: NextRequest) {
     );
   }
 
-  const { data: report } = await supabaseAdmin
+  const { data: report } = await supabase
     .from("ai_feedback_reports")
     .select("*")
     .eq("id", reportId)
-    .single();
+    .maybeSingle();
 
   if (!report) {
     return NextResponse.json({ error: "Report not found" }, { status: 404 });
@@ -174,7 +176,7 @@ export async function DELETE(request: NextRequest) {
     );
   }
 
-  await supabaseAdmin
+  await supabase
     .from("ai_feedback_reports")
     .delete()
     .eq("id", reportId);

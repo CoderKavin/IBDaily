@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { supabaseAdmin } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase";
 import {
   withAuthGet,
   withAuth,
@@ -25,13 +25,15 @@ function generateJoinCode(): string {
  * Compute cohort status info including paid member count
  */
 async function getCohortStatusInfo(cohortId: string) {
-  const { data: cohort } = await supabaseAdmin
+  const supabase = getSupabaseAdmin();
+
+  const { data: cohort, error } = await supabase
     .from("cohorts")
     .select("*")
     .eq("id", cohortId)
-    .single();
+    .maybeSingle();
 
-  if (!cohort) return null;
+  if (error || !cohort) return null;
 
   const members = await db.cohortMembers.findByCohort(cohortId);
 
@@ -56,7 +58,7 @@ async function getCohortStatusInfo(cohortId: string) {
 
   // Update cohort status in DB if it changed
   if (statusInfo.status !== cohort.status) {
-    await supabaseAdmin
+    await supabase
       .from("cohorts")
       .update({
         status: statusInfo.status,
@@ -103,15 +105,15 @@ export const GET = withAuthGet(async ({ session, searchParams }) => {
     memberships.map(async (m) => {
       const allMembers = await db.cohortMembers.findByCohort(m.cohort_id);
       return {
-        id: m.cohort.id,
-        name: m.cohort.name,
-        joinCode: m.cohort.join_code,
+        id: m.cohort?.id || m.cohort_id,
+        name: m.cohort?.name || 'Unknown',
+        joinCode: m.cohort?.join_code || '',
         memberCount: allMembers.length,
         joinedAt: m.joined_at,
-        isActive: m.cohort.id === user?.active_cohort_id,
+        isActive: m.cohort_id === user?.active_cohort_id,
         role: m.role,
-        status: m.cohort.status,
-        trialEndsAt: m.cohort.trial_ends_at,
+        status: m.cohort?.status || 'TRIAL',
+        trialEndsAt: m.cohort?.trial_ends_at || null,
       };
     })
   );
@@ -167,9 +169,9 @@ export const POST = withAuth<{
 
     return success({
       activeCohort: {
-        id: membership.cohort.id,
-        name: membership.cohort.name,
-        joinCode: membership.cohort.join_code,
+        id: membership.cohort?.id || cohortId,
+        name: membership.cohort?.name || 'Unknown',
+        joinCode: membership.cohort?.join_code || '',
       },
       statusInfo,
     });

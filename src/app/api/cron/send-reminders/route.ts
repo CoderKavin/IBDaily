@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase";
 import { db } from "@/lib/db";
 import {
   sendEmail,
@@ -67,8 +67,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const supabase = getSupabaseAdmin();
+
     // Get active cohorts
-    const { data: cohorts } = await supabaseAdmin
+    const { data: cohorts } = await supabase
       .from("cohorts")
       .select("id, name")
       .in("status", ["ACTIVE", "TRIAL"]);
@@ -118,7 +120,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get existing reminder logs for today
-    const { data: existingLogs } = await supabaseAdmin
+    const { data: existingLogs } = await supabase
       .from("reminder_logs")
       .select("user_id, cohort_id, type")
       .eq("date_key", dateKey);
@@ -172,7 +174,7 @@ export async function POST(request: NextRequest) {
       });
 
       if (emailResult.success) {
-        await supabaseAdmin.from("reminder_logs").insert({
+        await supabase.from("reminder_logs").insert({
           user_id: candidate.userId,
           cohort_id: candidate.cohortId,
           date_key: dateKey,

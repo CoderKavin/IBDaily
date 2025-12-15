@@ -1,5 +1,4 @@
 import { db } from "@/lib/db";
-import { supabaseAdmin } from "@/lib/supabase";
 import {
   withAuthGet,
   withAuth,
