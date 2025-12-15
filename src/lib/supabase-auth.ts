@@ -1,3 +1,5 @@
+"use client";
+
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -5,14 +7,15 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
  * This uses the anon key and handles user sign up/sign in
  */
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-
 // Lazy-initialized auth client
 let _authClient: SupabaseClient | null = null;
 
 function getAuthClient(): SupabaseClient {
   if (!_authClient) {
+    // Read env vars at runtime for client-side
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+
     if (!supabaseUrl || !supabaseAnonKey) {
       throw new Error("Supabase is not configured");
     }
