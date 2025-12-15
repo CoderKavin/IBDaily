@@ -3,25 +3,25 @@ import Credentials from "next-auth/providers/credentials";
 import { getSupabaseAdmin, isSupabaseConfigured } from "./supabase";
 
 /**
- * NextAuth configuration with Firebase credentials provider
- * Users authenticate via Firebase, then we create/link their account in Supabase
+ * NextAuth configuration with Supabase credentials provider
+ * Users authenticate via Supabase Auth, then we create/link their account in our users table
  */
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
     Credentials({
-      id: "firebase",
-      name: "Firebase",
+      id: "credentials",
+      name: "Supabase",
       credentials: {
         email: { label: "Email", type: "email" },
-        firebaseUid: { label: "Firebase UID", type: "text" },
+        supabaseUserId: { label: "Supabase User ID", type: "text" },
         name: { label: "Name", type: "text" },
       },
       async authorize(credentials) {
         try {
           // Validate inputs
-          if (!credentials?.email || !credentials?.firebaseUid) {
-            console.error("[Auth] Missing email or firebaseUid");
+          if (!credentials?.email || !credentials?.supabaseUserId) {
+            console.error("[Auth] Missing email or supabaseUserId");
             return null;
           }
 
@@ -32,7 +32,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           }
 
           const email = credentials.email as string;
-          const firebaseUid = credentials.firebaseUid as string;
+          const supabaseUserId = credentials.supabaseUserId as string;
           const name = (credentials.name as string) || null;
 
           const supabase = getSupabaseAdmin();
@@ -57,7 +57,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               .from("users")
               .insert({
                 email,
-                firebase_uid: firebaseUid,
+                firebase_uid: supabaseUserId, // Reusing firebase_uid column for Supabase user ID
                 name,
                 onboarding_completed: false,
                 onboarding_step: 0,
@@ -73,14 +73,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             user = newUser;
             console.log("[Auth] Created new user:", user.id);
           } else if (!user.firebase_uid) {
-            // Link Firebase UID to existing user if not already linked
+            // Link Supabase User ID to existing user if not already linked
             const { error: updateError } = await supabase
               .from("users")
-              .update({ firebase_uid: firebaseUid })
+              .update({ firebase_uid: supabaseUserId })
               .eq("id", user.id);
 
             if (updateError) {
-              console.error("[Auth] Error linking Firebase UID:", updateError.message);
+              console.error(
+                "[Auth] Error linking Supabase User ID:",
+                updateError.message,
+              );
               // Don't fail - user can still proceed
             }
           }

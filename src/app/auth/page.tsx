@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Card, PrimaryButton } from "@/components/ui";
-import { signInWithEmail, signUpWithEmail } from "@/lib/firebase";
+import { signInWithEmail, signUpWithEmail } from "@/lib/supabase-auth";
 
 export default function AuthPage() {
   const router = useRouter();
@@ -37,23 +37,39 @@ export default function AuthPage() {
     setLoading(true);
 
     try {
-      let firebaseUser;
+      let supabaseUser;
 
       if (isLogin) {
-        // Sign in with Firebase
-        const userCredential = await signInWithEmail(email, password);
-        firebaseUser = userCredential.user;
+        // Sign in with Supabase
+        const { user } = await signInWithEmail(email, password);
+        supabaseUser = user;
       } else {
-        // Sign up with Firebase
-        const userCredential = await signUpWithEmail(email, password);
-        firebaseUser = userCredential.user;
+        // Sign up with Supabase
+        const { user } = await signUpWithEmail(email, password);
+        supabaseUser = user;
+
+        // Check if email confirmation is required
+        if (!supabaseUser) {
+          setInfo(
+            "Please check your email to confirm your account, then log in.",
+          );
+          setIsLogin(true);
+          setLoading(false);
+          return;
+        }
       }
 
-      // Now sign in with NextAuth using Firebase credentials
+      if (!supabaseUser) {
+        setError("Authentication failed. Please try again.");
+        setLoading(false);
+        return;
+      }
+
+      // Now sign in with NextAuth using Supabase credentials
       const result = await signIn("credentials", {
-        email: firebaseUser.email,
-        firebaseUid: firebaseUser.uid,
-        name: name || firebaseUser.displayName || "",
+        email: supabaseUser.email,
+        supabaseUserId: supabaseUser.id,
+        name: name || supabaseUser.user_metadata?.name || "",
         redirect: false,
       });
 
@@ -64,44 +80,26 @@ export default function AuthPage() {
         router.refresh();
       }
     } catch (err) {
-      // Handle Firebase auth errors
-      const firebaseError = err as { code?: string; message?: string };
-      switch (firebaseError.code) {
-        case "auth/user-not-found":
-        case "auth/wrong-password":
-        case "auth/invalid-credential":
-          setError("Invalid email or password");
-          break;
-        case "auth/email-already-in-use":
-          setError("Email already in use. Please log in.");
-          setIsLogin(true);
-          break;
-        case "auth/weak-password":
-          setError("Password should be at least 6 characters");
-          break;
-        case "auth/invalid-email":
-          setError("Invalid email address");
-          break;
-        case "auth/too-many-requests":
-          setError("Too many attempts. Please try again later.");
-          break;
-        case "auth/network-request-failed":
-          setError("Network error. Please check your connection.");
-          break;
-        case "auth/operation-not-allowed":
-          setError("Email/Password sign-in is not enabled. Please contact support.");
-          break;
-        case "auth/user-disabled":
-          setError("This account has been disabled.");
-          break;
-        case "auth/requires-recent-login":
-          setError("Please log in again to continue.");
-          break;
-        default:
-          console.error("Auth error:", firebaseError.code, firebaseError.message);
-          setError(
-            firebaseError.message || "Something went wrong. Please try again.",
-          );
+      // Handle Supabase auth errors
+      const supabaseError = err as { message?: string; status?: number };
+      const message = supabaseError.message || "";
+
+      if (message.includes("Invalid login credentials")) {
+        setError("Invalid email or password");
+      } else if (message.includes("Email not confirmed")) {
+        setError("Please confirm your email before logging in");
+      } else if (message.includes("User already registered")) {
+        setError("Email already in use. Please log in.");
+        setIsLogin(true);
+      } else if (message.includes("Password should be")) {
+        setError("Password should be at least 6 characters");
+      } else if (message.includes("Invalid email")) {
+        setError("Invalid email address");
+      } else if (message.includes("Email rate limit exceeded")) {
+        setError("Too many attempts. Please try again later.");
+      } else {
+        console.error("Auth error:", message);
+        setError(message || "Something went wrong. Please try again.");
       }
     } finally {
       setLoading(false);
